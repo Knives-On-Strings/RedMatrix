@@ -1,8 +1,3 @@
-/// USB transport trait — abstracted for mocking in tests.
-///
-/// All USB communication goes through this trait. The real implementation
-/// wraps `rusb`, while tests use `MockTransport` with pre-configured responses.
-
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -19,31 +14,34 @@ pub enum TransportError {
 
 /// Trait for USB control transfers to a Scarlett2 device.
 pub trait UsbTransport: Send + Sync {
-    /// Send a command and receive a response.
     fn transfer(&mut self, data: &[u8]) -> Result<Vec<u8>, TransportError>;
 }
 
+/// Mock transport for testing. Returns pre-configured responses in order.
 #[cfg(test)]
-mod tests {
+pub(crate) mod mock {
     use super::*;
     use std::collections::VecDeque;
 
-    /// Mock transport that returns pre-configured responses in order.
-    struct MockTransport {
+    pub struct MockTransport {
         responses: VecDeque<Result<Vec<u8>, TransportError>>,
-        sent: Vec<Vec<u8>>,
+        pub sent: Vec<Vec<u8>>,
     }
 
     impl MockTransport {
-        fn new() -> Self {
+        pub fn new() -> Self {
             Self {
                 responses: VecDeque::new(),
                 sent: Vec::new(),
             }
         }
 
-        fn push_response(&mut self, response: Vec<u8>) {
+        pub fn push_response(&mut self, response: Vec<u8>) {
             self.responses.push_back(Ok(response));
+        }
+
+        pub fn push_error(&mut self, error: TransportError) {
+            self.responses.push_back(Err(error));
         }
     }
 
@@ -55,6 +53,12 @@ mod tests {
                 .unwrap_or(Err(TransportError::UnexpectedResponse))
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use super::mock::MockTransport;
 
     #[test]
     fn mock_transport_records_sent_data() {
@@ -72,5 +76,13 @@ mod tests {
         let mut transport = MockTransport::new();
         let result = transport.transfer(&[0x00]);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn mock_transport_push_error() {
+        let mut transport = MockTransport::new();
+        transport.push_error(TransportError::Timeout);
+        let result = transport.transfer(&[0x00]);
+        assert!(matches!(result, Err(TransportError::Timeout)));
     }
 }

@@ -32,6 +32,14 @@ pub const NOTIFY_MONITOR: u32 = 0x0040_0000;
 pub const NOTIFY_INPUT_OTHER: u32 = 0x0080_0000;
 pub const NOTIFY_MONITOR_OTHER: u32 = 0x0100_0000;
 
+// -- Packet Constants --
+
+/// Size of the packet header in bytes.
+pub const HEADER_SIZE: usize = 16;
+
+/// Maximum payload size for a single command/response.
+pub const MAX_PAYLOAD_SIZE: usize = 1024;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -73,5 +81,11 @@ mod tests {
         assert_eq!(NOTIFY_MONITOR, 0x0040_0000);
         assert_eq!(NOTIFY_INPUT_OTHER, 0x0080_0000);
         assert_eq!(NOTIFY_MONITOR_OTHER, 0x0100_0000);
+    }
+
+    #[test]
+    fn packet_constants() {
+        assert_eq!(HEADER_SIZE, 16);
+        assert_eq!(MAX_PAYLOAD_SIZE, 1024);
     }
 }
