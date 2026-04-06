@@ -95,6 +95,18 @@ pub fn mixer_value_to_db(value: u16) -> f64 {
     }
 }
 
+/// Convert a dB value to the raw wire format for line output volume.
+/// Clamps to [-127, 0] dB range. Resolution: 1 dB per step.
+pub fn db_to_volume_raw(db: f64) -> i16 {
+    let clamped = db.clamp(VOLUME_MIN_DB, VOLUME_MAX_DB);
+    (clamped.round() as i16) + VOLUME_BIAS
+}
+
+/// Convert a raw wire value to dB for line output volume.
+pub fn volume_raw_to_db(raw: i16) -> f64 {
+    (raw - VOLUME_BIAS) as f64
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -198,6 +210,45 @@ mod tests {
                 value, value_back,
                 "round-trip failed at index {}: db={} -> value={} -> db_back={} -> value_back={}",
                 i, db, value, db_back, value_back
+            );
+        }
+    }
+
+    #[test]
+    fn db_to_volume_raw_at_zero() {
+        assert_eq!(db_to_volume_raw(0.0), 127);
+    }
+
+    #[test]
+    fn db_to_volume_raw_at_min() {
+        assert_eq!(db_to_volume_raw(-127.0), 0);
+    }
+
+    #[test]
+    fn db_to_volume_raw_clamping() {
+        assert_eq!(db_to_volume_raw(-200.0), 0);
+        assert_eq!(db_to_volume_raw(10.0), 127);
+    }
+
+    #[test]
+    fn volume_raw_to_db_at_max() {
+        assert_eq!(volume_raw_to_db(127), 0.0);
+    }
+
+    #[test]
+    fn volume_raw_to_db_at_min() {
+        assert_eq!(volume_raw_to_db(0), -127.0);
+    }
+
+    #[test]
+    fn volume_round_trip_all_integer_values() {
+        for raw in 0..=127i16 {
+            let db = volume_raw_to_db(raw);
+            let raw_back = db_to_volume_raw(db);
+            assert_eq!(
+                raw_back, raw,
+                "round-trip failed: raw {} -> db {} -> raw {}",
+                raw, db, raw_back
             );
         }
     }
