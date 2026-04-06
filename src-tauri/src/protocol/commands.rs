@@ -64,6 +64,26 @@ impl PacketHeader {
     }
 }
 
+pub struct SequenceCounter {
+    seq: u16,
+}
+
+impl SequenceCounter {
+    pub fn new() -> Self {
+        Self { seq: 0 }
+    }
+
+    pub fn next(&mut self) -> u16 {
+        let current = self.seq;
+        self.seq = self.seq.wrapping_add(1);
+        current
+    }
+
+    pub fn reset(&mut self, val: u16) {
+        self.seq = val;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -94,5 +114,30 @@ mod tests {
             result,
             Err(CommandError::BufferTooShort { expected: 16, got: 10 })
         ));
+    }
+
+    #[test]
+    fn sequence_counter_increments() {
+        let mut seq = SequenceCounter::new();
+        assert_eq!(seq.next(), 0);
+        assert_eq!(seq.next(), 1);
+        assert_eq!(seq.next(), 2);
+    }
+
+    #[test]
+    fn sequence_counter_wraps_at_u16_max() {
+        let mut seq = SequenceCounter::new();
+        seq.reset(u16::MAX);
+        assert_eq!(seq.next(), u16::MAX);
+        assert_eq!(seq.next(), 0);
+    }
+
+    #[test]
+    fn sequence_counter_reset() {
+        let mut seq = SequenceCounter::new();
+        seq.next();
+        seq.next();
+        seq.reset(1);
+        assert_eq!(seq.next(), 1);
     }
 }
