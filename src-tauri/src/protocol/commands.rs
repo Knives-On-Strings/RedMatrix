@@ -1,5 +1,5 @@
 use super::constants::*;
-use super::transport::TransportError;
+use super::transport::{TransportError, UsbTransport};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -288,9 +288,71 @@ pub fn validate_response(
     Ok(())
 }
 
+pub struct CommandRunner<T: UsbTransport> {
+    transport: T,
+    seq: SequenceCounter,
+}
+
+impl<T: UsbTransport> CommandRunner<T> {
+    pub fn new(transport: T) -> Self {
+        Self {
+            transport,
+            seq: SequenceCounter::new(),
+        }
+    }
+
+    pub fn execute(&mut self, request: Request) -> Result<Response, CommandError> {
+        let seq = self.seq.next();
+        let packet = try_serialize_request(&request, seq)?;
+
+        let resp_bytes = self.transport.transfer(&packet).map_err(|e| match e {
+            TransportError::Timeout => CommandError::Timeout,
+            other => CommandError::Transport { source: other },
+        })?;
+
+        let resp_header = PacketHeader::from_bytes(&resp_bytes)?;
+        let req_header = PacketHeader {
+            cmd: request.cmd_id(),
+            size: 0,
+            seq,
+            error: 0,
+            pad: 0,
+        };
+
+        validate_response(&req_header, &resp_header)?;
+
+        let payload = if resp_bytes.len() > HEADER_SIZE {
+            &resp_bytes[HEADER_SIZE..]
+        } else {
+            &[]
+        };
+
+        parse_response(request.cmd_id(), payload)
+    }
+
+    pub fn initialize(&mut self) -> Result<u32, CommandError> {
+        self.seq.reset(1);
+        self.execute(Request::Init1)?;
+
+        self.seq.reset(1);
+        let response = self.execute(Request::Init2)?;
+
+        match response {
+            Response::Init2 { firmware_version } => Ok(firmware_version),
+            _ => Err(CommandError::UnknownCommand { cmd_id: CMD_INIT_2 }),
+        }
+    }
+
+    pub fn transport(&self) -> &T {
+        &self.transport
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::transport::mock::MockTransport;
+    use super::super::transport::TransportError;
 
     #[test]
     fn packet_header_round_trip() {
@@ -582,5 +644,65 @@ mod tests {
             Response::Mux { entries } => assert_eq!(entries, vec![0x08000001, 0x06000003]),
             _ => panic!("expected Mux response"),
         }
+    }
+
+    fn mock_response_packet(cmd: u32, seq: u16, payload: &[u8]) -> Vec<u8> {
+        let header = PacketHeader {
+            cmd,
+            size: payload.len() as u16,
+            seq,
+            error: 0,
+            pad: 0,
+        };
+        let mut packet = Vec::with_capacity(HEADER_SIZE + payload.len());
+        packet.extend_from_slice(&header.to_bytes());
+        packet.extend_from_slice(payload);
+        packet
+    }
+
+    #[test]
+    fn command_runner_execute_round_trip() {
+        let mut transport = MockTransport::new();
+        let resp_packet = mock_response_packet(CMD_GET_SYNC, 0, &1u32.to_le_bytes());
+        transport.push_response(resp_packet);
+
+        let mut runner = CommandRunner::new(transport);
+        let response = runner.execute(Request::GetSync).unwrap();
+        assert!(matches!(response, Response::Sync { status: 1 }));
+    }
+
+    #[test]
+    fn command_runner_execute_timeout() {
+        let mut transport = MockTransport::new();
+        transport.push_error(TransportError::Timeout);
+
+        let mut runner = CommandRunner::new(transport);
+        let result = runner.execute(Request::GetSync);
+        assert!(matches!(result, Err(CommandError::Timeout)));
+    }
+
+    #[test]
+    fn command_runner_initialize_sequence() {
+        let mut transport = MockTransport::new();
+
+        let init1_resp = mock_response_packet(CMD_INIT_1, 0, &[]);
+        transport.push_response(init1_resp);
+
+        let mut init2_payload = vec![0u8; 84];
+        init2_payload[8..12].copy_from_slice(&1083u32.to_le_bytes());
+        let init2_resp = mock_response_packet(CMD_INIT_2, 0, &init2_payload);
+        transport.push_response(init2_resp);
+
+        let mut runner = CommandRunner::new(transport);
+        let firmware_version = runner.initialize().unwrap();
+        assert_eq!(firmware_version, 1083);
+
+        let transport = runner.transport();
+        let init1_header = PacketHeader::from_bytes(&transport.sent[0]).unwrap();
+        assert_eq!(init1_header.cmd, CMD_INIT_1);
+        assert_eq!(init1_header.seq, 1);
+        let init2_header = PacketHeader::from_bytes(&transport.sent[1]).unwrap();
+        assert_eq!(init2_header.cmd, CMD_INIT_2);
+        assert_eq!(init2_header.seq, 1);
     }
 }
