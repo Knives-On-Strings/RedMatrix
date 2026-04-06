@@ -2,121 +2,228 @@
 """
 Phase 0, Script 1: Enumerate USB interfaces on the Scarlett 18i20.
 
-Finds the device by VID/PID and dumps all interface descriptors.
-Identifies the vendor-specific control interface (bInterfaceClass=255).
-
-Run: python scripts/01_enumerate.py
-
-No driver changes needed for this script — it just reads descriptors.
+Uses libusb directly via ctypes to read config descriptors without
+opening the device (which fails when the Focusrite driver owns it).
 """
 
 import sys
+import os
+import ctypes
+from ctypes import byref, c_int, c_uint8, c_uint16, c_uint32, POINTER, Structure, c_void_p, c_char_p
 
-try:
-    import usb.core
-    import usb.util
-except ImportError:
-    print("ERROR: pyusb not installed. Run: pip install pyusb")
+# Point at the local libusb DLL
+dll_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "libusb-1.0.dll")
+if not os.path.exists(dll_path):
+    print(f"ERROR: libusb-1.0.dll not found at {dll_path}")
     sys.exit(1)
 
-VID = 0x1235  # Focusrite
-PID = 0x8215  # Scarlett 18i20 Gen 3
+lib = ctypes.CDLL(dll_path)
+
+VID = 0x1235
+PID = 0x8215
+
+# Minimal libusb structures
+class libusb_device_descriptor(Structure):
+    _fields_ = [
+        ("bLength", c_uint8),
+        ("bDescriptorType", c_uint8),
+        ("bcdUSB", c_uint16),
+        ("bDeviceClass", c_uint8),
+        ("bDeviceSubClass", c_uint8),
+        ("bDeviceProtocol", c_uint8),
+        ("bMaxPacketSize0", c_uint8),
+        ("idVendor", c_uint16),
+        ("idProduct", c_uint16),
+        ("bcdDevice", c_uint16),
+        ("iManufacturer", c_uint8),
+        ("iProduct", c_uint8),
+        ("iSerialNumber", c_uint8),
+        ("bNumConfigurations", c_uint8),
+    ]
+
+class libusb_endpoint_descriptor(Structure):
+    _fields_ = [
+        ("bLength", c_uint8),
+        ("bDescriptorType", c_uint8),
+        ("bEndpointAddress", c_uint8),
+        ("bmAttributes", c_uint8),
+        ("wMaxPacketSize", c_uint16),
+        ("bInterval", c_uint8),
+        ("bRefresh", c_uint8),
+        ("bSynchAddress", c_uint8),
+        ("extra", c_void_p),
+        ("extra_length", c_int),
+    ]
+
+class libusb_interface_descriptor(Structure):
+    _fields_ = [
+        ("bLength", c_uint8),
+        ("bDescriptorType", c_uint8),
+        ("bInterfaceNumber", c_uint8),
+        ("bAlternateSetting", c_uint8),
+        ("bNumEndpoints", c_uint8),
+        ("bInterfaceClass", c_uint8),
+        ("bInterfaceSubClass", c_uint8),
+        ("bInterfaceProtocol", c_uint8),
+        ("iInterface", c_uint8),
+        ("endpoint", POINTER(libusb_endpoint_descriptor)),
+        ("extra", c_void_p),
+        ("extra_length", c_int),
+    ]
+
+class libusb_interface(Structure):
+    _fields_ = [
+        ("altsetting", POINTER(libusb_interface_descriptor)),
+        ("num_altsetting", c_int),
+    ]
+
+class libusb_config_descriptor(Structure):
+    _fields_ = [
+        ("bLength", c_uint8),
+        ("bDescriptorType", c_uint8),
+        ("wTotalLength", c_uint16),
+        ("bNumInterfaces", c_uint8),
+        ("bConfigurationValue", c_uint8),
+        ("iConfiguration", c_uint8),
+        ("bmAttributes", c_uint8),
+        ("MaxPower", c_uint8),
+        ("interface", POINTER(libusb_interface)),
+        ("extra", c_void_p),
+        ("extra_length", c_int),
+    ]
 
 def main():
     print(f"Looking for Focusrite Scarlett 18i20 Gen 3 (VID={VID:#06x}, PID={PID:#06x})...")
     print()
 
-    dev = usb.core.find(idVendor=VID, idProduct=PID)
-    if dev is None:
-        print("ERROR: Device not found.")
-        print("  - Is the Scarlett 18i20 connected and powered on?")
-        print("  - Check Device Manager for the device.")
-        print()
-        # Also try finding ANY Focusrite device
-        print("Searching for any Focusrite device (VID=0x1235)...")
-        all_focusrite = list(usb.core.find(find_all=True, idVendor=VID))
-        if all_focusrite:
-            for d in all_focusrite:
-                print(f"  Found: PID={d.idProduct:#06x} at bus {d.bus}, address {d.address}")
-        else:
-            print("  No Focusrite devices found at all.")
+    ctx = c_void_p()
+    ret = lib.libusb_init(byref(ctx))
+    if ret != 0:
+        print(f"ERROR: libusb_init failed ({ret})")
         sys.exit(1)
 
-    print(f"Found: {dev.manufacturer} {dev.product}")
-    print(f"  Bus: {dev.bus}, Address: {dev.address}")
-    print(f"  USB Version: {dev.bcdUSB >> 8}.{(dev.bcdUSB >> 4) & 0xF}{dev.bcdUSB & 0xF}")
-    print(f"  Device Class: {dev.bDeviceClass}")
-    print(f"  Num Configurations: {dev.bNumConfigurations}")
+    dev_list = c_void_p()
+    count = lib.libusb_get_device_list(ctx, byref(dev_list))
+    if count < 0:
+        print(f"ERROR: libusb_get_device_list failed ({count})")
+        sys.exit(1)
+
+    # Set up proper function signatures for 64-bit pointers
+    lib.libusb_get_device_descriptor.argtypes = [c_void_p, POINTER(libusb_device_descriptor)]
+    lib.libusb_get_device_descriptor.restype = c_int
+    lib.libusb_get_bus_number.argtypes = [c_void_p]
+    lib.libusb_get_bus_number.restype = c_uint8
+    lib.libusb_get_device_address.argtypes = [c_void_p]
+    lib.libusb_get_device_address.restype = c_uint8
+    lib.libusb_get_active_config_descriptor.argtypes = [c_void_p, POINTER(POINTER(libusb_config_descriptor))]
+    lib.libusb_get_active_config_descriptor.restype = c_int
+    lib.libusb_get_config_descriptor.argtypes = [c_void_p, c_uint8, POINTER(POINTER(libusb_config_descriptor))]
+    lib.libusb_get_config_descriptor.restype = c_int
+    lib.libusb_free_config_descriptor.argtypes = [POINTER(libusb_config_descriptor)]
+    lib.libusb_free_device_list.argtypes = [c_void_p, c_int]
+
+    # Find our device
+    target = None
+    desc = libusb_device_descriptor()
+    device_array = ctypes.cast(dev_list, POINTER(c_void_p))
+
+    for i in range(count):
+        dev = device_array[i]
+        if dev is None or dev == 0:
+            break
+        ret = lib.libusb_get_device_descriptor(dev, byref(desc))
+        if ret == 0 and desc.idVendor == VID and desc.idProduct == PID:
+            target = dev
+            break
+
+    if target is None:
+        print("ERROR: Device not found.")
+        lib.libusb_free_device_list(dev_list, 1)
+        lib.libusb_exit(ctx)
+        sys.exit(1)
+
+    bus = lib.libusb_get_bus_number(target)
+    addr = lib.libusb_get_device_address(target)
+    print(f"Found device at bus {bus}, address {addr}")
+    print(f"  VID: {desc.idVendor:#06x}, PID: {desc.idProduct:#06x}")
+    print(f"  Device Class: {desc.bDeviceClass:#04x}")
     print()
 
-    cfg = dev.get_active_configuration()
-    if cfg is None:
-        print("ERROR: No active configuration. Device may not be initialized.")
+    # Read config descriptor (doesn't require opening the device!)
+    config_ptr = POINTER(libusb_config_descriptor)()
+    ret = lib.libusb_get_active_config_descriptor(target, byref(config_ptr))
+    if ret != 0:
+        # Try config index 0 as fallback
+        ret = lib.libusb_get_config_descriptor(target, 0, byref(config_ptr))
+    if ret != 0:
+        print(f"ERROR: Cannot read config descriptor ({ret})")
+        lib.libusb_free_device_list(dev_list, 1)
+        lib.libusb_exit(ctx)
         sys.exit(1)
 
-    print(f"Active Configuration: {cfg.bConfigurationValue}")
+    cfg = config_ptr.contents
+    print(f"Configuration {cfg.bConfigurationValue}:")
     print(f"  Num Interfaces: {cfg.bNumInterfaces}")
     print()
 
-    control_iface = None
+    control_iface_num = None
 
-    for intf in cfg:
-        class_name = {
-            0: "Unspecified",
-            1: "Audio",
-            2: "CDC",
-            3: "HID",
-            8: "Mass Storage",
-            255: "Vendor Specific",
-        }.get(intf.bInterfaceClass, f"Unknown ({intf.bInterfaceClass})")
+    for i in range(cfg.bNumInterfaces):
+        iface = cfg.interface[i]
+        # Show only alt setting 0 for each interface
+        if iface.num_altsetting == 0:
+            continue
+        alt = iface.altsetting[0]
 
-        print(f"Interface {intf.bInterfaceNumber}:")
-        print(f"  Class: {intf.bInterfaceClass} ({class_name})")
-        print(f"  SubClass: {intf.bInterfaceSubClass}")
-        print(f"  Protocol: {intf.bInterfaceProtocol}")
-        print(f"  Num Endpoints: {intf.bNumEndpoints}")
-        print(f"  Alternate Setting: {intf.bAlternateSetting}")
+        class_names = {
+            0x00: "Unspecified",
+            0x01: "Audio",
+            0x02: "CDC",
+            0x03: "HID",
+            0x08: "Mass Storage",
+            0xFF: "Vendor Specific",
+        }
+        class_name = class_names.get(alt.bInterfaceClass, f"0x{alt.bInterfaceClass:02x}")
 
-        if intf.bInterfaceClass == 255:
-            control_iface = intf
-            print(f"  >>> THIS IS THE CONTROL INTERFACE <<<")
+        subclass_info = ""
+        if alt.bInterfaceClass == 0x01:
+            subclass_names = {0x01: "Audio Control", 0x02: "Audio Streaming", 0x03: "MIDI Streaming"}
+            subclass_info = f" ({subclass_names.get(alt.bInterfaceSubClass, '?')})"
 
-        for ep in intf:
-            direction = "IN" if usb.util.endpoint_direction(ep.bEndpointAddress) == usb.util.ENDPOINT_IN else "OUT"
-            transfer_type = {
-                0: "Control",
-                1: "Isochronous",
-                2: "Bulk",
-                3: "Interrupt",
-            }.get(usb.util.endpoint_type(ep.bmAttributes), "Unknown")
+        is_control = alt.bInterfaceClass == 0xFF
+        marker = "  >>> CONTROL INTERFACE <<<" if is_control else ""
 
-            print(f"  Endpoint {ep.bEndpointAddress:#04x}:")
-            print(f"    Direction: {direction}")
-            print(f"    Transfer Type: {transfer_type}")
-            print(f"    Max Packet Size: {ep.wMaxPacketSize}")
-            print(f"    Interval: {ep.bInterval}")
+        print(f"Interface {alt.bInterfaceNumber}: Class={class_name}{subclass_info}  "
+              f"SubClass={alt.bInterfaceSubClass}  Protocol={alt.bInterfaceProtocol}  "
+              f"Endpoints={alt.bNumEndpoints}  AltSettings={iface.num_altsetting}"
+              f"{marker}")
 
-        print()
+        if is_control:
+            control_iface_num = alt.bInterfaceNumber
 
-    if control_iface is not None:
+        for j in range(alt.bNumEndpoints):
+            ep = alt.endpoint[j]
+            direction = "IN" if ep.bEndpointAddress & 0x80 else "OUT"
+            xfer_type = ["Control", "Isochronous", "Bulk", "Interrupt"][ep.bmAttributes & 0x03]
+            print(f"    EP {ep.bEndpointAddress:#04x}: {direction} {xfer_type}  "
+                  f"MaxPacket={ep.wMaxPacketSize}  Interval={ep.bInterval}")
+
+    lib.libusb_free_config_descriptor(config_ptr)
+    lib.libusb_free_device_list(dev_list, 1)
+    lib.libusb_exit(ctx)
+
+    print()
+    if control_iface_num is not None:
         print("=" * 60)
-        print(f"CONTROL INTERFACE FOUND: Interface {control_iface.bInterfaceNumber}")
-        print(f"  Use this interface number with Zadig to install WinUSB.")
+        print(f"CONTROL INTERFACE: Interface {control_iface_num}")
+        print(f"  Class 0xFF (Vendor Specific) = 'Focusrite Control'")
         print()
-        print("NEXT STEPS:")
-        print(f"  1. Open Zadig")
-        print(f"  2. Options > List All Devices")
-        print(f"  3. Find the Scarlett 18i20 interface {control_iface.bInterfaceNumber}")
-        print(f"     (It may show as 'Interface {control_iface.bInterfaceNumber}' in the dropdown)")
-        print(f"  4. Select WinUSB as the target driver")
-        print(f"  5. Click 'Replace Driver' or 'Install Driver'")
-        print(f"  6. Verify audio still works (play music)")
-        print(f"  7. Then run: python scripts/02_claim_test.py")
+        print("NEXT STEP:")
+        print(f"  Use Zadig to install WinUSB on Interface {control_iface_num}")
+        print(f"  Then run: python scripts/02_claim_test.py")
         print("=" * 60)
     else:
-        print("WARNING: No vendor-specific (class 255) interface found.")
-        print("  The control interface may be using a different class,")
-        print("  or the device descriptor layout may differ from expectations.")
+        print("WARNING: No vendor-specific (class 0xFF) interface found.")
 
 if __name__ == "__main__":
     main()
