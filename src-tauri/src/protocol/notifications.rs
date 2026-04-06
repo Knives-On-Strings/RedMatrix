@@ -1,8 +1,8 @@
-/// Notification bitmask decoding.
-///
-/// The device sends notification packets with a u32 bitmask indicating
-/// which state categories have changed. The host must then re-read
-/// the relevant state via GET commands.
+//! Notification bitmask decoding.
+//!
+//! The device sends notification packets with a u32 bitmask indicating
+//! which state categories have changed. The host must then re-read
+//! the relevant state via GET commands.
 
 use super::constants::*;
 

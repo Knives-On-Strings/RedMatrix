@@ -172,12 +172,18 @@ pub struct SequenceCounter {
     seq: u16,
 }
 
+impl Default for SequenceCounter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SequenceCounter {
     pub fn new() -> Self {
         Self { seq: 0 }
     }
 
-    pub fn next(&mut self) -> u16 {
+    pub fn next_seq(&mut self) -> u16 {
         let current = self.seq;
         self.seq = self.seq.wrapping_add(1);
         current
@@ -302,7 +308,7 @@ impl<T: UsbTransport> CommandRunner<T> {
     }
 
     pub fn execute(&mut self, request: Request) -> Result<Response, CommandError> {
-        let seq = self.seq.next();
+        let seq = self.seq.next_seq();
         let packet = try_serialize_request(&request, seq)?;
 
         let resp_bytes = self.transport.transfer(&packet).map_err(|e| match e {
@@ -385,26 +391,26 @@ mod tests {
     #[test]
     fn sequence_counter_increments() {
         let mut seq = SequenceCounter::new();
-        assert_eq!(seq.next(), 0);
-        assert_eq!(seq.next(), 1);
-        assert_eq!(seq.next(), 2);
+        assert_eq!(seq.next_seq(), 0);
+        assert_eq!(seq.next_seq(), 1);
+        assert_eq!(seq.next_seq(), 2);
     }
 
     #[test]
     fn sequence_counter_wraps_at_u16_max() {
         let mut seq = SequenceCounter::new();
         seq.reset(u16::MAX);
-        assert_eq!(seq.next(), u16::MAX);
-        assert_eq!(seq.next(), 0);
+        assert_eq!(seq.next_seq(), u16::MAX);
+        assert_eq!(seq.next_seq(), 0);
     }
 
     #[test]
     fn sequence_counter_reset() {
         let mut seq = SequenceCounter::new();
-        seq.next();
-        seq.next();
+        seq.next_seq();
+        seq.next_seq();
         seq.reset(1);
-        assert_eq!(seq.next(), 1);
+        assert_eq!(seq.next_seq(), 1);
     }
 
     #[test]
