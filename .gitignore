@@ -19,3 +19,6 @@ Thumbs.db
 # Environment
 .env
 .env.*
+
+# Third-party DLLs (download locally, don't commit)
+scripts/*.dll
