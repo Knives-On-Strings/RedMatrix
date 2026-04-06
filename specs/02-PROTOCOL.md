@@ -128,7 +128,7 @@ Key reference points:
 |----|-------|---------------|
 | -80 (silence) | 0 | 0 |
 | -60 | 40 | 8 |
-| -40 | 80 | 82 |
+| -40 | 80 | 81 |
 | -20 | 120 | 819 |
 | -6 | 148 | 4105 |
 | 0 (unity) | 160 | 8192 |
@@ -140,7 +140,9 @@ The full 173-entry lookup table is in the kernel source and must be ported exact
 
 Output volumes use a bias of 127: `volume_raw = dB_value + 127`
 
-So 0dB = 127, -63.5dB = 0, etc. The range is 0.5dB per step.
+So 0dB = 127, -127dB = 0, etc. The range is 1 dB per step (128 values, 0..127 raw).
+
+Source: kernel driver `SCARLETT2_VOLUME_BIAS = 127` and `DECLARE_TLV_DB_MINMAX(db_scale_scarlett2_gain, -12700, 0)` which is -127.00 dB to 0.00 dB in ALSA hundredths-of-dB units.
 
 ## Volume Status Block
 
