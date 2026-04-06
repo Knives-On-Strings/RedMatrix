@@ -1,18 +1,25 @@
 # 05 — Project Backlog
 
-## Phase 0: Validation (1-2 weekends)
+## Phase 0: Validation (1-2 weekends) — COMPLETE ✓
 
-- [ ] USB descriptor dump of 18i20 on Windows (USBView or USBTreeView)
-- [ ] Install USBPcap on Windows
-- [ ] Wireshark capture of Focusrite Control traffic while changing settings
-- [ ] **Save captured packets as test fixtures** in `tests/fixtures/` (pcap + annotated JSON)
-- [ ] Compare captured command IDs against protocol spec (`02-PROTOCOL.md` §Command IDs)
-- [ ] Identify which USB interface number and endpoints Focusrite Control uses for commands
-- [ ] Use Zadig to install WinUSB on the control interface only (NOT audio interfaces)
-- [ ] Write Python/PyUSB test script: send INIT_1 (`0x00000000`), verify response
-- [ ] Verify Windows audio still works after claiming control interface with WinUSB
-- [ ] Document interface number, endpoint addresses, and max packet size
-- [ ] **Set up Tauri project scaffold with `cargo test` and Vitest running**
+- [x] USB descriptor dump of 18i20 on Windows (USBTreeView) — 6 interfaces found
+- [ ] Install USBPcap on Windows — deferred, not needed for initial validation
+- [ ] Wireshark capture of Focusrite Control traffic — deferred
+- [x] **Save captured packets as test fixtures** in `tests/fixtures/` — 4 binary fixtures from real device
+- [x] Compare captured command IDs against protocol spec — INIT_1, INIT_2, GET_SYNC, GET_DATA all confirmed
+- [x] Identify which USB interface number and endpoints Focusrite Control uses for commands — Interface 3 (class 0xFF), EP 0x83 IN (interrupt), control transfers on EP 0 (bRequest 2/3)
+- [x] Use Zadig to install WinUSB — installed on whole device (per-interface not possible, Focusrite driver is monolithic)
+- [x] Write Python/PyUSB test script: send INIT_1, verify response — SUCCESS, firmware version 1644
+- [ ] Verify Windows audio still works after claiming control interface with WinUSB — NOT possible with current approach; WinUSB replaces Focusrite driver entirely. Need custom .inf for MI_03 coexistence.
+- [x] Document interface number, endpoint addresses, and max packet size — Interface 3, EP 0x83 (64B interrupt), EP 0 control transfers (512B max)
+- [x] **Set up Tauri project scaffold with `cargo test` and Vitest running** — 95 Rust + 1 frontend test passing
+
+### Phase 0 Key Findings
+- Protocol implementation is validated: packet format, sequence numbers, command IDs all correct
+- Focusrite driver binds monolithically — no per-interface WinUSB without custom .inf or filter driver
+- macOS likely easier (libusb can access interfaces alongside kernel drivers)
+- GET_METER returned error 9 — needs investigation (wrong meter count or magic value?)
+- Firmware version 1644 = bcdDevice 0x066C, build date "Feb 25 2020"
 
 ## Phase 1: Protocol Library (2-3 weekends)
 

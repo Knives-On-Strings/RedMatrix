@@ -2,25 +2,49 @@
 
 ## Blockers (must answer before writing code)
 
-### 1. Can we claim the USB control interface on Windows?
-**Status:** Unvalidated — Phase 0 task
+### 1. Can we claim the USB control interface on Windows? — ANSWERED: Yes, with caveats
+**Status:** Validated 2026-04-06
 
-Can WinUSB/libusb access the Scarlett's control endpoint while Focusrite's audio driver owns the streaming interfaces? Everything depends on this. If the control interface is a separate USB interface (likely), this should work. If Focusrite's driver claims all interfaces, we need an alternative approach.
+**Finding:** The Scarlett 18i20 Gen 3 exposes 6 USB interfaces. Interface 3 (class 0xFF, "Focusrite Control") is the proprietary control interface with one interrupt endpoint (EP 0x83 IN, 64 bytes). Command/response uses USB control transfers on endpoint 0 (bRequest=2 for TX, bRequest=3 for RX).
 
-**Fallback strategies if WinUSB on the sub-interface fails:**
-1. Filter driver that selectively exposes the control interface
-2. Investigate whether Focusrite Control exposes a local IPC/WebSocket/RPC server for its own UI — wrapping their local API may be a last-resort escape hatch on Windows
-3. Require user to close Focusrite Control (acceptable tradeoff)
+**The problem:** The Focusrite Windows driver (`FocusriteUsb.sys`) binds to the **entire composite device** as a single driver — it does not use the Windows USB Composite Device driver to split interfaces. Zadig cannot target Interface 3 individually. Replacing the whole device driver with WinUSB works but breaks audio.
 
-### 2. Can RedMatrix and Focusrite Control coexist?
-**Status:** Unknown
+**The solution (for production):**
+1. Write a custom WinUSB `.inf` file targeting `USB\VID_1235&PID_8215&MI_03` (Interface 3 only). This requires the Windows USB Composite Device driver (`usbccgp.sys`) to split the device first.
+2. Alternatively, a USB filter driver that sits between the Focusrite driver and the USB stack, intercepting control transfers to Interface 3.
+3. On macOS, libusb can access individual interfaces without driver replacement — this problem is Windows-specific.
 
-If a user has Focusrite Control installed, can both apps access the control interface simultaneously? Or does one lock the other out? Affects UX — do we tell users to close FC before launching RedMatrix?
+**Validated:** INIT_1, INIT_2, GET_SYNC, GET_DATA all work correctly. Firmware version 1644 extracted. Real test fixtures captured.
 
-### 3. Full binary packet format
-**Status:** Partially known
+### 2. Can RedMatrix and Focusrite Control coexist? — PARTIALLY ANSWERED
+**Status:** Needs further investigation
 
-We have command IDs and high-level structure from the kernel source, but the `scarlett2_usb()` function that builds/sends actual packets was truncated. Need the full header layout: byte order, header size, sequence number position, payload offset, response format. Resolution: clone the kernel driver repo locally and read it with Claude Code, or extract from Phase 0 Wireshark captures.
+With the current Focusrite driver binding monolithically, RedMatrix cannot access the control interface while the Focusrite driver is loaded. The two apps cannot run simultaneously on Windows without the driver solution described in Blocker #1.
+
+On macOS this may be different — libusb can often access interfaces alongside kernel drivers. Needs testing.
+
+### 3. Full binary packet format — ANSWERED: Confirmed
+**Status:** Validated 2026-04-06
+
+Packet format confirmed against real hardware:
+
+```
+Offset  Size  Field    Notes
+0       4     cmd      Command ID, little-endian
+4       2     size     Payload size (data only, not header)
+6       2     seq      Sequence number
+8       4     error    0 = success
+12      4     pad      Must be 0
+16+     var   payload  Command-specific data
+```
+
+USB control transfer details:
+- TX: bRequest=2 (CMD_REQ), bmRequestType=0x21, wIndex=3 (interface number)
+- RX: bRequest=3 (CMD_RESP), bmRequestType=0xA1, wIndex=3
+- Init step 0: bRequest=0 (CMD_INIT), reads 24 bytes
+- Notifications: EP 0x83 IN, interrupt, 64 bytes max
+
+Sequence handling confirmed: INIT_1 sent with seq=1, response has seq=0 (init special case). INIT_2 sent with seq=1, response has seq=1.
 
 ## Decided
 
