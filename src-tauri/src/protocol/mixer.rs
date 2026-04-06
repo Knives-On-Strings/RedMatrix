@@ -67,6 +67,34 @@ pub fn db_to_mixer_value(db: f64) -> u16 {
     MIXER_VALUES[db_to_mixer_index(db)]
 }
 
+/// Convert a 16-bit hardware mixer gain value back to dB.
+/// Returns the dB value of the closest table entry.
+pub fn mixer_value_to_db(value: u16) -> f64 {
+    if value == 0 {
+        return MIXER_MIN_DB;
+    }
+
+    match MIXER_VALUES.binary_search(&value) {
+        Ok(index) => (index as f64 - MIXER_BIAS as f64) / 2.0,
+        Err(insert_pos) => {
+            let idx = if insert_pos >= MIXER_TABLE_LEN {
+                MIXER_TABLE_LEN - 1
+            } else if insert_pos == 0 {
+                0
+            } else {
+                let diff_above = MIXER_VALUES[insert_pos] - value;
+                let diff_below = value - MIXER_VALUES[insert_pos - 1];
+                if diff_below <= diff_above {
+                    insert_pos - 1
+                } else {
+                    insert_pos
+                }
+            };
+            (idx as f64 - MIXER_BIAS as f64) / 2.0
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -139,5 +167,38 @@ mod tests {
         assert_eq!(db_to_mixer_index(MIXER_MIN_DB), 0);
         assert_eq!(db_to_mixer_index(0.0), 160);
         assert_eq!(db_to_mixer_index(MIXER_MAX_DB), 172);
+    }
+
+    #[test]
+    fn mixer_value_to_db_at_known_values() {
+        assert_eq!(mixer_value_to_db(0), MIXER_MIN_DB);
+        assert_eq!(mixer_value_to_db(8192), 0.0);
+        assert_eq!(mixer_value_to_db(16345), MIXER_MAX_DB);
+    }
+
+    #[test]
+    fn mixer_value_to_db_intermediate_finds_closest() {
+        // 8192 is 0.0 dB (index 160), 8677 is +0.5 dB (index 161)
+        assert_eq!(mixer_value_to_db(8400), 0.0);   // closer to 8192
+        assert_eq!(mixer_value_to_db(8500), 0.5);    // closer to 8677
+    }
+
+    #[test]
+    fn mixer_value_round_trip_all_entries() {
+        for i in 0..MIXER_TABLE_LEN {
+            let db = (i as f64 - MIXER_BIAS as f64) / 2.0;
+            let value = db_to_mixer_value(db);
+            let db_back = mixer_value_to_db(value);
+            // Multiple indices can map to the same value (e.g., indices 0-3 all -> 0).
+            // The reverse lookup returns the dB for the first matching index.
+            // So we verify the round-trip produces the same hardware value,
+            // not necessarily the same dB.
+            let value_back = db_to_mixer_value(db_back);
+            assert_eq!(
+                value, value_back,
+                "round-trip failed at index {}: db={} -> value={} -> db_back={} -> value_back={}",
+                i, db, value, db_back, value_back
+            );
+        }
     }
 }
