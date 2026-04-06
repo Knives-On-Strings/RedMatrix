@@ -188,6 +188,71 @@ impl SequenceCounter {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum Response {
+    Ack,
+    Init2 { firmware_version: u32 },
+    Meter { levels: Vec<u16> },
+    Mix { gains: Vec<u16> },
+    Mux { entries: Vec<u32> },
+    Sync { status: u32 },
+    Data { data: Vec<u8> },
+}
+
+pub fn parse_response(cmd_id: u32, data: &[u8]) -> Result<Response, CommandError> {
+    match cmd_id {
+        CMD_INIT_1 | CMD_SET_MIX | CMD_SET_MUX | CMD_SET_DATA | CMD_DATA_CMD => {
+            Ok(Response::Ack)
+        }
+        CMD_INIT_2 => {
+            if data.len() < 12 {
+                return Err(CommandError::BufferTooShort {
+                    expected: 12,
+                    got: data.len(),
+                });
+            }
+            let firmware_version =
+                u32::from_le_bytes([data[8], data[9], data[10], data[11]]);
+            Ok(Response::Init2 { firmware_version })
+        }
+        CMD_GET_METER => {
+            let levels = data
+                .chunks_exact(2)
+                .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+                .collect();
+            Ok(Response::Meter { levels })
+        }
+        CMD_GET_MIX => {
+            let gains = data
+                .chunks_exact(2)
+                .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+                .collect();
+            Ok(Response::Mix { gains })
+        }
+        CMD_GET_MUX => {
+            let entries = data
+                .chunks_exact(4)
+                .map(|chunk| u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+                .collect();
+            Ok(Response::Mux { entries })
+        }
+        CMD_GET_SYNC => {
+            if data.len() < 4 {
+                return Err(CommandError::BufferTooShort {
+                    expected: 4,
+                    got: data.len(),
+                });
+            }
+            let status = u32::from_le_bytes([data[0], data[1], data[2], data[3]]);
+            Ok(Response::Sync { status })
+        }
+        CMD_GET_DATA => {
+            Ok(Response::Data { data: data.to_vec() })
+        }
+        _ => Err(CommandError::UnknownCommand { cmd_id }),
+    }
+}
+
 pub fn validate_response(
     req_header: &PacketHeader,
     resp_header: &PacketHeader,
@@ -447,5 +512,75 @@ mod tests {
             validate_response(&req, &resp),
             Err(CommandError::InvalidPadding { value: 0xDEAD })
         ));
+    }
+
+    #[test]
+    fn parse_response_init2_firmware_version() {
+        let mut data = vec![0u8; 84];
+        data[8..12].copy_from_slice(&1083u32.to_le_bytes());
+        let resp = parse_response(CMD_INIT_2, &data).unwrap();
+        assert!(matches!(resp, Response::Init2 { firmware_version: 1083 }));
+    }
+
+    #[test]
+    fn parse_response_sync_status() {
+        let data = 1u32.to_le_bytes();
+        let resp = parse_response(CMD_GET_SYNC, &data).unwrap();
+        assert!(matches!(resp, Response::Sync { status: 1 }));
+    }
+
+    #[test]
+    fn parse_response_meter_levels() {
+        let mut data = Vec::new();
+        for val in [100u16, 200, 300, 400] {
+            data.extend_from_slice(&val.to_le_bytes());
+        }
+        let resp = parse_response(CMD_GET_METER, &data).unwrap();
+        match resp {
+            Response::Meter { levels } => assert_eq!(levels, vec![100, 200, 300, 400]),
+            _ => panic!("expected Meter response"),
+        }
+    }
+
+    #[test]
+    fn parse_response_data_passthrough() {
+        let data = vec![0xAA, 0xBB, 0xCC];
+        let resp = parse_response(CMD_GET_DATA, &data).unwrap();
+        match resp {
+            Response::Data { data: d } => assert_eq!(d, vec![0xAA, 0xBB, 0xCC]),
+            _ => panic!("expected Data response"),
+        }
+    }
+
+    #[test]
+    fn parse_response_ack_for_set_commands() {
+        let resp = parse_response(CMD_SET_MIX, &[]).unwrap();
+        assert!(matches!(resp, Response::Ack));
+    }
+
+    #[test]
+    fn parse_response_mix_gains() {
+        let mut data = Vec::new();
+        for val in [8192u16, 0, 4105] {
+            data.extend_from_slice(&val.to_le_bytes());
+        }
+        let resp = parse_response(CMD_GET_MIX, &data).unwrap();
+        match resp {
+            Response::Mix { gains } => assert_eq!(gains, vec![8192, 0, 4105]),
+            _ => panic!("expected Mix response"),
+        }
+    }
+
+    #[test]
+    fn parse_response_mux_entries() {
+        let mut data = Vec::new();
+        for val in [0x08000001u32, 0x06000003] {
+            data.extend_from_slice(&val.to_le_bytes());
+        }
+        let resp = parse_response(CMD_GET_MUX, &data).unwrap();
+        match resp {
+            Response::Mux { entries } => assert_eq!(entries, vec![0x08000001, 0x06000003]),
+            _ => panic!("expected Mux response"),
+        }
     }
 }
