@@ -188,6 +188,41 @@ impl SequenceCounter {
     }
 }
 
+pub fn validate_response(
+    req_header: &PacketHeader,
+    resp_header: &PacketHeader,
+) -> Result<(), CommandError> {
+    if resp_header.cmd != req_header.cmd {
+        return Err(CommandError::CommandMismatch {
+            expected: req_header.cmd,
+            got: resp_header.cmd,
+        });
+    }
+
+    let seq_ok = resp_header.seq == req_header.seq
+        || (req_header.seq == 1 && resp_header.seq == 0);
+    if !seq_ok {
+        return Err(CommandError::SequenceMismatch {
+            expected: req_header.seq,
+            got: resp_header.seq,
+        });
+    }
+
+    if resp_header.error != 0 {
+        return Err(CommandError::DeviceError {
+            code: resp_header.error,
+        });
+    }
+
+    if resp_header.pad != 0 {
+        return Err(CommandError::InvalidPadding {
+            value: resp_header.pad,
+        });
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -351,5 +386,66 @@ mod tests {
             1,
         );
         assert!(matches!(result, Err(CommandError::PayloadTooLarge { .. })));
+    }
+
+    fn make_header(cmd: u32, seq: u16) -> PacketHeader {
+        PacketHeader { cmd, size: 0, seq, error: 0, pad: 0 }
+    }
+
+    #[test]
+    fn validate_response_matching_cmd_seq() {
+        let req = make_header(CMD_GET_SYNC, 5);
+        let resp = make_header(CMD_GET_SYNC, 5);
+        assert!(validate_response(&req, &resp).is_ok());
+    }
+
+    #[test]
+    fn validate_response_mismatched_cmd() {
+        let req = make_header(CMD_GET_SYNC, 5);
+        let resp = make_header(CMD_GET_MIX, 5);
+        assert!(matches!(
+            validate_response(&req, &resp),
+            Err(CommandError::CommandMismatch { expected, got })
+            if expected == CMD_GET_SYNC && got == CMD_GET_MIX
+        ));
+    }
+
+    #[test]
+    fn validate_response_mismatched_seq() {
+        let req = make_header(CMD_GET_SYNC, 5);
+        let resp = make_header(CMD_GET_SYNC, 6);
+        assert!(matches!(
+            validate_response(&req, &resp),
+            Err(CommandError::SequenceMismatch { expected: 5, got: 6 })
+        ));
+    }
+
+    #[test]
+    fn validate_response_init_special_case() {
+        let req = make_header(CMD_INIT_1, 1);
+        let resp = make_header(CMD_INIT_1, 0);
+        assert!(validate_response(&req, &resp).is_ok());
+    }
+
+    #[test]
+    fn validate_response_device_error() {
+        let req = make_header(CMD_GET_SYNC, 5);
+        let mut resp = make_header(CMD_GET_SYNC, 5);
+        resp.error = 42;
+        assert!(matches!(
+            validate_response(&req, &resp),
+            Err(CommandError::DeviceError { code: 42 })
+        ));
+    }
+
+    #[test]
+    fn validate_response_non_zero_pad() {
+        let req = make_header(CMD_GET_SYNC, 5);
+        let mut resp = make_header(CMD_GET_SYNC, 5);
+        resp.pad = 0xDEAD;
+        assert!(matches!(
+            validate_response(&req, &resp),
+            Err(CommandError::InvalidPadding { value: 0xDEAD })
+        ));
     }
 }
