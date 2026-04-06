@@ -53,6 +53,20 @@ pub const MIXER_VALUES: [u16; MIXER_TABLE_LEN] = [
  12983, 13752, 14567, 15430, 16345,
 ];
 
+/// Convert a dB value to a mixer table index.
+/// Clamps to [MIXER_MIN_DB, MIXER_MAX_DB] and quantizes to 0.5 dB steps.
+pub fn db_to_mixer_index(db: f64) -> usize {
+    let clamped = db.clamp(MIXER_MIN_DB, MIXER_MAX_DB);
+    let index = ((clamped - MIXER_MIN_DB) / MIXER_STEP_DB).round() as usize;
+    index.min(MIXER_TABLE_LEN - 1)
+}
+
+/// Convert a dB value to the 16-bit hardware mixer gain value.
+/// Clamps to [-80, +6] dB range.
+pub fn db_to_mixer_value(db: f64) -> u16 {
+    MIXER_VALUES[db_to_mixer_index(db)]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -96,5 +110,34 @@ mod tests {
                 i, MIXER_VALUES[i], computed, diff
             );
         }
+    }
+
+    #[test]
+    fn db_to_mixer_value_at_boundaries() {
+        assert_eq!(db_to_mixer_value(MIXER_MIN_DB), 0);
+        assert_eq!(db_to_mixer_value(MIXER_MAX_DB), 16345);
+    }
+
+    #[test]
+    fn db_to_mixer_value_clamping() {
+        assert_eq!(db_to_mixer_value(-100.0), 0);
+        assert_eq!(db_to_mixer_value(20.0), 16345);
+    }
+
+    #[test]
+    fn db_to_mixer_value_at_unity() {
+        assert_eq!(db_to_mixer_value(0.0), 8192);
+    }
+
+    #[test]
+    fn db_to_mixer_value_at_half_step() {
+        assert_eq!(db_to_mixer_value(-0.5), 7733);
+    }
+
+    #[test]
+    fn db_to_mixer_index_at_known_points() {
+        assert_eq!(db_to_mixer_index(MIXER_MIN_DB), 0);
+        assert_eq!(db_to_mixer_index(0.0), 160);
+        assert_eq!(db_to_mixer_index(MIXER_MAX_DB), 172);
     }
 }
