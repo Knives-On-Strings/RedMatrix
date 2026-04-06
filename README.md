@@ -1,6 +1,6 @@
 # RedMatrix
 
-> ⚠️ **Pre-alpha — not yet functional.** The USB protocol research is complete but the app hasn't been built yet. Star/watch the repo to follow progress.
+> ⚠️ **Pre-alpha — not yet functional.** USB protocol validated against real hardware, Rust protocol library in progress. Star/watch the repo to follow progress.
 
 > *RedMatrix is a working name.*
 
@@ -75,8 +75,8 @@ See [`specs/01-ARCHITECTURE.md`](specs/01-ARCHITECTURE.md) for full details.
 
 | Phase | Description | Status |
 |-------|-------------|--------|
-| 0 | USB access validation (can we talk to the device on Windows?) | Not started |
-| 1 | Protocol library in Rust (TDD) | Not started |
+| 0 | USB access validation | **Complete** ✅ — protocol confirmed against real 18i20 hardware |
+| 1 | Protocol library in Rust (TDD) | **In progress** — command serialization, mixer encoding, and all 15 device configs done (95 tests passing) |
 | 2 | Desktop MVP (all 5 tabs working) | Not started |
 | 3 | Multi-device support + polish | Not started |
 | 4 | iPad remote app | Not started |
@@ -105,12 +105,22 @@ The project uses test-driven development — see `CLAUDE.md` for the full method
 
 ## Building
 
-> 🚧 Build instructions will be added once there's something to build.
+Prerequisites:
+- Rust 1.77+ (`rustup` — https://rustup.rs)
+- Node.js 20+ and npm
+- Tauri CLI (`cargo install tauri-cli --version "^2"`)
 
-Prerequisites (planned):
-- Rust toolchain
-- Node.js 20+
-- Tauri CLI (`cargo install tauri-cli`)
+```bash
+# Install frontend dependencies
+npm install
+
+# Run tests
+npm test                    # 1 frontend test
+cd src-tauri && cargo test  # 95 Rust tests
+
+# Run the app (opens a window — no device connection yet)
+cargo tauri dev
+```
 
 ## Contributing
 
