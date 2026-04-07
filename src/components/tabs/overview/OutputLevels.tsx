@@ -1,4 +1,5 @@
 import type { DeviceState, OutputState } from "../../../types";
+import { mockMeterLevel } from "../../../constants";
 
 interface OutputLevelsProps {
   state: DeviceState;
@@ -6,7 +7,7 @@ interface OutputLevelsProps {
 
 function OutputRow({ output, isInactive }: { output: OutputState; isInactive: boolean }) {
   // Mock level bar (will be real meter data later)
-  const level = output.muted ? 0 : 0.3 + Math.random() * 0.2;
+  const level = output.muted ? 0 : mockMeterLevel();
   const width = Math.max(0, Math.min(100, level * 100));
 
   // Determine badges

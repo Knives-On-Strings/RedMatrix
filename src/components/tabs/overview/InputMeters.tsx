@@ -1,19 +1,9 @@
 import type { DeviceState, InputState } from "../../../types";
+import { mockMeterLevel } from "../../../constants";
+import MeterBar from "../../MeterBar";
 
 interface InputMetersProps {
   state: DeviceState;
-}
-
-function MeterBar({ level }: { level: number }) {
-  // level: 0.0 (silence) to 1.0 (full scale)
-  const height = Math.max(0, Math.min(100, level * 100));
-  const color = level > 0.9 ? "bg-red-500" : level > 0.7 ? "bg-amber-400" : "bg-green-500";
-
-  return (
-    <div className="w-3 h-24 bg-neutral-800 rounded-sm overflow-hidden flex flex-col-reverse">
-      <div className={`${color} rounded-sm transition-all duration-75`} style={{ height: `${height}%` }} />
-    </div>
-  );
 }
 
 function ChannelStrip({ input, level }: { input: InputState; level: number }) {
@@ -50,10 +40,9 @@ export default function InputMeters({ state }: InputMetersProps) {
   const adat = state.inputs.filter((i) => i.type === "adat");
 
   // Mock meter levels (will be replaced by real meter data from transport)
-  const mockLevel = (_input: InputState) => 0.15 + Math.random() * 0.3;
-  const analogueLevels = analogue.map(mockLevel);
-  const spdifLevels = spdif.map(mockLevel);
-  const adatLevels = adat.map(mockLevel);
+  const analogueLevels = analogue.map(() => mockMeterLevel());
+  const spdifLevels = spdif.map(() => mockMeterLevel());
+  const adatLevels = adat.map(() => mockMeterLevel());
 
   return (
     <div className="flex items-end gap-6 px-4">

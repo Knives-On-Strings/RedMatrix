@@ -1,4 +1,5 @@
 import type { DeviceState, InputState } from "../../../types";
+import { useDevice } from "../../../hooks/useDevice";
 
 interface InputConfigProps {
   state: DeviceState;
@@ -19,11 +20,7 @@ function ToggleBadge({ label, active, onClick }: { label: string; active: boolea
   );
 }
 
-function InputRow({ input }: { input: InputState }) {
-  const handleToggle = () => {
-    // TODO: send via transport
-  };
-
+function InputRow({ input, onToggle }: { input: InputState; onToggle: (feature: string) => void }) {
   return (
     <div className="flex items-center gap-3 py-2 border-b border-neutral-800">
       <span className="text-xs text-neutral-300 w-28">{input.name}</span>
@@ -32,11 +29,11 @@ function InputRow({ input }: { input: InputState }) {
       {input.type === "analogue" && (
         <div className="flex gap-1.5">
           {input.index < 2 && (
-            <ToggleBadge label="INST" active={input.inst} onClick={handleToggle} />
+            <ToggleBadge label="INST" active={input.inst} onClick={() => onToggle("inst")} />
           )}
-          <ToggleBadge label="PAD" active={input.pad} onClick={handleToggle} />
-          <ToggleBadge label="AIR" active={input.air} onClick={handleToggle} />
-          <ToggleBadge label="48V" active={input.phantom} onClick={handleToggle} />
+          <ToggleBadge label="PAD" active={input.pad} onClick={() => onToggle("pad")} />
+          <ToggleBadge label="AIR" active={input.air} onClick={() => onToggle("air")} />
+          <ToggleBadge label="48V" active={input.phantom} onClick={() => onToggle("phantom")} />
         </div>
       )}
 
@@ -81,10 +78,29 @@ function DawStereoPairRow({ left, right, name }: { left: number; right: number; 
 }
 
 export default function InputConfig({ state }: InputConfigProps) {
+  const { sendCommand } = useDevice();
+
   const analogue = state.inputs.filter((i) => i.type === "analogue");
   const spdif = state.inputs.filter((i) => i.type === "spdif");
   const adat = state.inputs.filter((i) => i.type === "adat");
   const dawOutCount = state.port_counts.pcm.outputs;
+
+  const handleToggle = (input: InputState, feature: string) => {
+    switch (feature) {
+      case "pad":
+        sendCommand({ type: "set_input_pad", payload: { index: input.index, enabled: !input.pad } });
+        break;
+      case "air":
+        sendCommand({ type: "set_input_air", payload: { index: input.index, enabled: !input.air } });
+        break;
+      case "phantom":
+        sendCommand({ type: "set_input_phantom", payload: { group: input.index, enabled: !input.phantom } });
+        break;
+      case "inst":
+        sendCommand({ type: "set_input_inst", payload: { index: input.index, enabled: !input.inst } });
+        break;
+    }
+  };
 
   return (
     <div className="p-4 max-w-2xl">
@@ -94,7 +110,7 @@ export default function InputConfig({ state }: InputConfigProps) {
         <div className="mb-4">
           <h4 className="text-[10px] text-neutral-500 uppercase tracking-wider mb-1">Analogue Inputs</h4>
           {analogue.map((input) => (
-            <InputRow key={`${input.type}-${input.index}`} input={input} />
+            <InputRow key={`${input.type}-${input.index}`} input={input} onToggle={(f) => handleToggle(input, f)} />
           ))}
         </div>
       )}
@@ -103,7 +119,7 @@ export default function InputConfig({ state }: InputConfigProps) {
         <div className="mb-4">
           <h4 className="text-[10px] text-neutral-500 uppercase tracking-wider mb-1">S/PDIF Inputs</h4>
           {spdif.map((input) => (
-            <InputRow key={`${input.type}-${input.index}`} input={input} />
+            <InputRow key={`${input.type}-${input.index}`} input={input} onToggle={(f) => handleToggle(input, f)} />
           ))}
         </div>
       )}
@@ -112,7 +128,7 @@ export default function InputConfig({ state }: InputConfigProps) {
         <div className="mb-4">
           <h4 className="text-[10px] text-neutral-500 uppercase tracking-wider mb-1">ADAT Inputs</h4>
           {adat.map((input) => (
-            <InputRow key={`${input.type}-${input.index}`} input={input} />
+            <InputRow key={`${input.type}-${input.index}`} input={input} onToggle={(f) => handleToggle(input, f)} />
           ))}
         </div>
       )}

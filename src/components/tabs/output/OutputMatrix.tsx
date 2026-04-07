@@ -1,67 +1,8 @@
-import type { DeviceState, PortType } from "../../../types";
+import type { DeviceState } from "../../../types";
+import { buildSourceList, buildDestList, type PortDef } from "../../../utils/routing";
 
 interface OutputMatrixProps {
   state: DeviceState;
-}
-
-const PORT_COLORS: Record<PortType, string> = {
-  off: "bg-neutral-800",
-  analogue: "bg-blue-600",
-  spdif: "bg-purple-600",
-  adat: "bg-teal-600",
-  mix: "bg-amber-600",
-  pcm: "bg-green-600",
-};
-
-interface PortDef {
-  type: PortType;
-  index: number;
-  label: string;
-  color: string;
-}
-
-function buildSourceList(state: DeviceState): PortDef[] {
-  const sources: PortDef[] = [];
-
-  for (let i = 0; i < state.port_counts.pcm.outputs; i++) {
-    sources.push({ type: "pcm", index: i, label: `DAW Out ${i + 1}`, color: PORT_COLORS.pcm });
-  }
-  for (let i = 0; i < state.port_counts.analogue.inputs; i++) {
-    sources.push({ type: "analogue", index: i, label: `Analogue In ${i + 1}`, color: PORT_COLORS.analogue });
-  }
-  for (let i = 0; i < state.port_counts.spdif.inputs; i++) {
-    sources.push({ type: "spdif", index: i, label: `S/PDIF In ${i === 0 ? "L" : "R"}`, color: PORT_COLORS.spdif });
-  }
-  for (let i = 0; i < state.port_counts.adat.inputs; i++) {
-    sources.push({ type: "adat", index: i, label: `ADAT In ${i + 1}`, color: PORT_COLORS.adat });
-  }
-  for (let i = 0; i < Math.min(state.port_counts.mix.outputs, 25); i++) {
-    sources.push({ type: "mix", index: i, label: `Mix ${String.fromCharCode(65 + i)}`, color: PORT_COLORS.mix });
-  }
-  sources.push({ type: "off", index: 0, label: "Off", color: PORT_COLORS.off });
-
-  return sources;
-}
-
-function buildDestList(state: DeviceState): PortDef[] {
-  const dests: PortDef[] = [];
-  let idx = 0;
-
-  for (let i = 0; i < state.port_counts.analogue.outputs; i++) {
-    const name = state.outputs[i]?.name ?? `Analogue Out ${i + 1}`;
-    dests.push({ type: "analogue", index: idx++, label: name, color: PORT_COLORS.analogue });
-  }
-  for (let i = 0; i < state.port_counts.spdif.outputs; i++) {
-    dests.push({ type: "spdif", index: idx++, label: `S/PDIF Out ${i === 0 ? "L" : "R"}`, color: PORT_COLORS.spdif });
-  }
-  for (let i = 0; i < state.port_counts.adat.outputs; i++) {
-    dests.push({ type: "adat", index: idx++, label: `ADAT Out ${i + 1}`, color: PORT_COLORS.adat });
-  }
-  for (let i = 0; i < state.port_counts.pcm.inputs; i++) {
-    dests.push({ type: "pcm", index: idx++, label: `DAW In ${i + 1}`, color: PORT_COLORS.pcm });
-  }
-
-  return dests;
 }
 
 function RouteCell({ active, sourceColor, onClick }: {
@@ -78,7 +19,7 @@ function RouteCell({ active, sourceColor, onClick }: {
           : "bg-neutral-800 border-neutral-700/50 hover:border-neutral-500"
       }`}
     >
-      {active && <span className="text-[7px] text-white font-bold">●</span>}
+      {active && <span className="text-[7px] text-white font-bold">{"\u25cf"}</span>}
     </button>
   );
 }
@@ -109,7 +50,7 @@ export default function OutputMatrix({ state }: OutputMatrixProps) {
     <div className="p-4">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm text-neutral-300 font-medium">
-          Source → Output ({sources.length} sources → {dests.length} destinations)
+          Source &rarr; Output ({sources.length} sources &rarr; {dests.length} destinations)
         </h3>
         <div className="flex gap-2">
           <button className="text-[10px] px-2 py-1 bg-neutral-700 text-neutral-400 rounded hover:bg-neutral-600">
@@ -122,7 +63,7 @@ export default function OutputMatrix({ state }: OutputMatrixProps) {
       </div>
 
       <div className="text-[9px] text-neutral-600 mb-2">
-        Rows = signal sources → Columns = output destinations. Click to route. One source per destination.
+        Rows = signal sources &rarr; Columns = output destinations. Click to route. One source per destination.
       </div>
 
       <div className="overflow-auto">

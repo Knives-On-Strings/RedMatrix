@@ -1,20 +1,12 @@
 import { useState } from "react";
 import type { InputState } from "../../types";
 import { useDevice } from "../../hooks/useDevice";
-
-function MeterBar({ level }: { level: number }) {
-  const height = Math.max(0, Math.min(100, level * 100));
-  const color = level > 0.9 ? "bg-red-500" : level > 0.7 ? "bg-amber-400" : "bg-green-500";
-  return (
-    <div className="w-2 h-32 bg-neutral-800 rounded-sm overflow-hidden flex flex-col-reverse">
-      <div className={`${color} rounded-sm`} style={{ height: `${height}%` }} />
-    </div>
-  );
-}
+import { dbToNormalized, normalizedToDb, formatDb, busLabel as busLabelFn, mockMeterLevel } from "../../constants";
+import MeterBar from "../MeterBar";
 
 function Fader({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   // value in dB, range -80 to +6
-  const normalized = (value + 80) / 86; // 0..1
+  const normalized = dbToNormalized(value);
   return (
     <div className="flex flex-col items-center gap-1">
       <input
@@ -24,13 +16,13 @@ function Fader({ value, onChange }: { value: number; onChange: (v: number) => vo
         value={normalized * 100}
         onChange={(e) => {
           const norm = Number(e.target.value) / 100;
-          onChange(norm * 86 - 80);
+          onChange(normalizedToDb(norm));
         }}
         className="h-32 appearance-none cursor-pointer accent-neutral-400"
         style={{ writingMode: "vertical-lr" as React.CSSProperties["writingMode"], direction: "rtl" }}
       />
       <span className="text-[9px] text-neutral-500 font-mono w-10 text-center">
-        {value <= -80 ? "-∞" : `${value.toFixed(0)}`}
+        {formatDb(value)}
       </span>
     </div>
   );
@@ -45,7 +37,7 @@ function ChannelStrip({ input, gainDb, soloed, muted, onGainChange, onSoloToggle
   onSoloToggle: () => void;
   onMuteToggle: () => void;
 }) {
-  const level = 0.2 + Math.random() * 0.3; // Mock meter
+  const level = mockMeterLevel();
   const label = input.type === "spdif"
     ? `S/${input.index === 0 ? "L" : "R"}`
     : input.type === "adat"
@@ -72,7 +64,7 @@ function ChannelStrip({ input, gainDb, soloed, muted, onGainChange, onSoloToggle
       </div>
 
       <div className="flex gap-1 items-end">
-        <MeterBar level={muted ? 0 : level} />
+        <MeterBar level={muted ? 0 : level} width="w-2" height="h-32" />
         <Fader value={gainDb} onChange={onGainChange} />
       </div>
 
@@ -223,7 +215,6 @@ export default function Mixer() {
   }
 
   const busCount = state.port_counts.mix.outputs;
-  const busLabel = (i: number) => String.fromCharCode(65 + i);
 
   const handleBusRename = (index: number, name: string) => {
     setBusNames((prev) => ({ ...prev, [index]: name }));
@@ -281,7 +272,7 @@ export default function Mixer() {
           <BusButton
             key={i}
             isActive={activeBus === i}
-            label={busLabel(i)}
+            label={busLabelFn(i)}
             customName={busNames[i] ?? ""}
             onClick={() => setActiveBus(i)}
             onRename={(name) => handleBusRename(i, name)}
@@ -356,7 +347,7 @@ export default function Mixer() {
                   >
                     {Array.from({ length: Math.min(busCount, 12) }, (_, i) => (
                       <option key={i} value={i}>
-                        {busLabel(i)}{busNames[i] ? ` ${busNames[i]}` : ""}
+                        {busLabelFn(i)}{busNames[i] ? ` ${busNames[i]}` : ""}
                       </option>
                     ))}
                   </select>
@@ -365,7 +356,7 @@ export default function Mixer() {
                     <div className="w-2 h-32 bg-neutral-800 rounded-sm overflow-hidden flex flex-col-reverse">
                       <div
                         className="bg-amber-500 rounded-sm"
-                        style={{ height: `${Math.max(0, Math.min(100, ((subDb + 80) / 86) * 100))}%` }}
+                        style={{ height: `${Math.max(0, Math.min(100, dbToNormalized(subDb) * 100))}%` }}
                       />
                     </div>
                     <div className="flex flex-col items-center gap-1">
@@ -373,16 +364,16 @@ export default function Mixer() {
                         type="range"
                         min={0}
                         max={100}
-                        value={((subDb + 80) / 86) * 100}
+                        value={dbToNormalized(subDb) * 100}
                         onChange={(e) => {
                           const norm = Number(e.target.value) / 100;
-                          handleBusMasterChange(assignedBus, norm * 86 - 80);
+                          handleBusMasterChange(assignedBus, normalizedToDb(norm));
                         }}
                         className="h-32 appearance-none cursor-pointer accent-amber-500"
                         style={{ writingMode: "vertical-lr" as React.CSSProperties["writingMode"], direction: "rtl" }}
                       />
                       <span className="text-[8px] text-neutral-400 font-mono w-10 text-center">
-                        {subDb <= -80 ? "-∞" : `${subDb >= 0 ? "+" : ""}${subDb.toFixed(0)}`}
+                        {formatDb(subDb)}
                       </span>
                     </div>
                   </div>
@@ -400,7 +391,7 @@ export default function Mixer() {
                 <div className="w-2 h-32 bg-neutral-800 rounded-sm overflow-hidden flex flex-col-reverse">
                   <div
                     className="bg-red-500 rounded-sm"
-                    style={{ height: `${Math.max(0, Math.min(100, ((masterDb + 80) / 86) * 100))}%` }}
+                    style={{ height: `${Math.max(0, Math.min(100, dbToNormalized(masterDb) * 100))}%` }}
                   />
                 </div>
                 <div className="flex flex-col items-center gap-1">
@@ -408,16 +399,16 @@ export default function Mixer() {
                     type="range"
                     min={0}
                     max={100}
-                    value={((masterDb + 80) / 86) * 100}
+                    value={dbToNormalized(masterDb) * 100}
                     onChange={(e) => {
                       const norm = Number(e.target.value) / 100;
-                      handleMasterChange(norm * 86 - 80);
+                      handleMasterChange(normalizedToDb(norm));
                     }}
                     className="h-32 appearance-none cursor-pointer accent-red-500"
                     style={{ writingMode: "vertical-lr" as React.CSSProperties["writingMode"], direction: "rtl" }}
                   />
                   <span className="text-[8px] text-neutral-400 font-mono w-10 text-center">
-                    {masterDb <= -80 ? "-∞" : `${masterDb >= 0 ? "+" : ""}${masterDb.toFixed(0)}`}
+                    {formatDb(masterDb)}
                   </span>
                 </div>
               </div>

@@ -65,3 +65,14 @@ export const PORT_COLORS: Record<PortType | "pcm_in", string> = {
   pcm: "bg-green-600",
   pcm_in: "bg-emerald-600",
 };
+
+// ── Mock meter helpers ────────────────────────────────────────
+
+/** Base level for mock meter data (will be replaced by real transport data). */
+export const MOCK_METER_BASE = 0.15;
+/** Random range added to base for mock meter data. */
+export const MOCK_METER_RANGE = 0.3;
+/** Generate a mock meter level (base + random range). */
+export function mockMeterLevel(): number {
+  return MOCK_METER_BASE + Math.random() * MOCK_METER_RANGE;
+}

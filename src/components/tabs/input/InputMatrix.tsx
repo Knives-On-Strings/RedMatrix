@@ -1,33 +1,9 @@
 import type { DeviceState } from "../../../types";
+import { busLabel } from "../../../constants";
+import GainCell from "../../GainCell";
 
 interface InputMatrixProps {
   state: DeviceState;
-}
-
-function GainCell({ db, onClick }: { db: number; onClick: () => void }) {
-  const isActive = db > -80;
-  const isUnity = Math.abs(db) < 0.5;
-
-  let bg = "bg-neutral-800";
-  if (isUnity) bg = "bg-green-600";
-  else if (isActive) {
-    const intensity = Math.min(1, (db + 80) / 80);
-    if (intensity > 0.5) bg = "bg-green-700";
-    else if (intensity > 0.2) bg = "bg-green-900";
-    else bg = "bg-green-950";
-  }
-
-  return (
-    <button
-      onClick={onClick}
-      className={`w-8 h-6 text-[8px] font-mono rounded-sm border border-neutral-700/50 ${bg} ${
-        isActive ? "text-neutral-200" : "text-neutral-600"
-      } hover:border-neutral-500 transition-colors`}
-      title={`${db <= -80 ? "-∞" : db.toFixed(1)} dB`}
-    >
-      {isActive ? (db <= -60 ? "·" : isUnity ? "0" : db.toFixed(0)) : ""}
-    </button>
-  );
 }
 
 export default function InputMatrix({ state }: InputMatrixProps) {
@@ -41,7 +17,6 @@ export default function InputMatrix({ state }: InputMatrixProps) {
 
   const busCount = Math.min(state.mixer.gains.length, state.port_counts.mix.outputs);
   const inputCount = state.mixer.gains[0]?.length ?? 0;
-  const busLabel = (i: number) => String.fromCharCode(65 + i);
 
   // Input labels (rows = sources)
   const inputLabels: string[] = [];
@@ -63,7 +38,7 @@ export default function InputMatrix({ state }: InputMatrixProps) {
     <div className="p-4">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm text-neutral-300 font-medium">
-          Input → Mixer Bus ({inputCount} sources → {busCount} buses)
+          Input &rarr; Mixer Bus ({inputCount} sources &rarr; {busCount} buses)
         </h3>
         <div className="flex gap-2">
           <button className="text-[10px] px-2 py-1 bg-neutral-700 text-neutral-400 rounded hover:bg-neutral-600">
@@ -76,7 +51,7 @@ export default function InputMatrix({ state }: InputMatrixProps) {
       </div>
 
       <div className="text-[9px] text-neutral-600 mb-2">
-        Rows = input sources → Columns = mixer buses. Click to set gain.
+        Rows = input sources &rarr; Columns = mixer buses. Click to set gain.
       </div>
 
       <div className="overflow-auto">
