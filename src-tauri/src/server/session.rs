@@ -60,16 +60,9 @@ pub struct ClientCommand {
 
 // ── Public entry point ──────────────────────────────────────────────
 
-/// Channel for requesting pairing approval from the desktop UI.
-/// The session sends a request (client name + fingerprint), the UI sends back true/false.
-pub type PairingApprovalTx = mpsc::Sender<PairingRequest>;
-
-#[derive(Debug)]
-pub struct PairingRequest {
-    pub client_name: String,
-    pub client_fingerprint: String,
-    pub response_tx: tokio::sync::oneshot::Sender<bool>,
-}
+/// Shared map for pending pairing approvals.
+/// Sessions store their oneshot::Sender here; the Tauri command pops it to respond.
+pub type PendingPairings = Arc<tokio::sync::Mutex<std::collections::HashMap<String, tokio::sync::oneshot::Sender<bool>>>>;
 
 /// Run a WebSocket session for one client. Returns when the connection closes.
 pub async fn run(
@@ -80,9 +73,9 @@ pub async fn run(
     broadcast: BroadcastHandle,
     command_tx: mpsc::Sender<ClientCommand>,
     require_pairing: bool,
-    pairing_tx: Option<PairingApprovalTx>,
+    pending_pairings: Option<PendingPairings>,
 ) {
-    if let Err(e) = run_inner(ws_stream, keypair, paired_store, state, broadcast, command_tx, require_pairing, pairing_tx).await
+    if let Err(e) = run_inner(ws_stream, keypair, paired_store, state, broadcast, command_tx, require_pairing, pending_pairings).await
     {
         log::warn!("Session ended: {}", e);
     }
@@ -98,7 +91,7 @@ async fn run_inner(
     broadcast: BroadcastHandle,
     command_tx: mpsc::Sender<ClientCommand>,
     require_pairing: bool,
-    pairing_tx: Option<PairingApprovalTx>,
+    pending_pairings: Option<PendingPairings>,
 ) -> Result<(), SessionError> {
     let (mut write, mut read) = ws_stream.split();
 
@@ -155,7 +148,7 @@ async fn run_inner(
 
         if !is_paired {
             // Unknown client — attempt interactive pairing
-            if let Some(ref pairing_tx) = pairing_tx {
+            if let Some(ref pairings) = pending_pairings {
                 // Send pairing_requested to client
                 let pairing_msg = ServerMessage::AuthResult {
                     status: "pairing_requested".to_string(),
@@ -166,17 +159,16 @@ async fn run_inner(
                     .await
                     .map_err(|e| SessionError::WebSocket(e.to_string()))?;
 
-                // Request approval from the desktop UI with timeout
+                // Store the oneshot sender in the shared pending map.
+                // The Tauri approve_pairing command will pop it and respond.
                 let (response_tx, response_rx) = tokio::sync::oneshot::channel();
-                let request = PairingRequest {
-                    client_name: _client_name.clone(),
-                    client_fingerprint: client_fingerprint.clone(),
-                    response_tx,
-                };
-
-                if pairing_tx.send(request).await.is_err() {
-                    return Err(SessionError::InvalidMessage("pairing channel closed".to_string()));
+                {
+                    let mut map = pairings.lock().await;
+                    map.insert(client_fingerprint.clone(), response_tx);
                 }
+                // Note: The Tauri event "pairing_requested" should be emitted
+                // by the listener/server code that has access to the AppHandle.
+                // For now, the React UI listens for this event separately.
 
                 let approved = timeout(PAIRING_TIMEOUT, response_rx)
                     .await
