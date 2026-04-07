@@ -417,7 +417,7 @@ The following commands have **hard server-side rate limits** to protect the devi
 }
 ```
 
-- Clients should show a warning when approaching the limit (e.g., "8 of 12 saves used this hour").
+- Clients should show a warning when approaching the limit (e.g., "8 of 12 saves used this hour. Your interface stores settings in flash memory, which has a limited number of write cycles. Frequent saving can shorten the lifespan of your device's storage.").
 - The `device_state` includes `save_config_remaining: 12` so clients can display this.
 - The limit is configurable in the server config file (`max_saves_per_hour`, default 12). Power users who understand the risk can increase it.
 
