@@ -38,22 +38,52 @@ fn build_state(config: &DeviceConfig) -> DeviceState {
         .collect();
 
     // ── Inputs ─────────────────────────────────────────────────
-    let num_analogue_in = pc.analogue.inputs as usize;
-    // For devices with talkback, the last analogue input is the talkback mic
-    // (already counted in analogue.inputs for 18i20 Gen 3 which has 9)
-    let inputs: Vec<InputState> = (0..num_analogue_in)
-        .map(|i| {
-            InputState {
-                index: i as u32,
-                name: format!("Analogue {}", i + 1),
-                input_type: "analogue".to_string(),
-                pad: false,
-                air: false,
-                phantom: false,
-                inst: false,
-            }
-        })
-        .collect();
+    // Include ALL input types: analogue, S/PDIF, and ADAT
+    let mut inputs: Vec<InputState> = Vec::new();
+
+    // Analogue inputs (for 18i20 Gen 3, the 9th is the talkback mic)
+    for i in 0..pc.analogue.inputs as usize {
+        let name = if config.has_talkback && i == pc.analogue.inputs as usize - 1 {
+            "Talkback".to_string()
+        } else {
+            format!("Analogue {}", i + 1)
+        };
+        inputs.push(InputState {
+            index: i as u32,
+            name,
+            input_type: "analogue".to_string(),
+            pad: false,
+            air: false,
+            phantom: false,
+            inst: false,
+        });
+    }
+
+    // S/PDIF inputs
+    for i in 0..pc.spdif.inputs as usize {
+        inputs.push(InputState {
+            index: i as u32,
+            name: format!("S/PDIF {}", if i == 0 { "L" } else { "R" }),
+            input_type: "spdif".to_string(),
+            pad: false,
+            air: false,
+            phantom: false,
+            inst: false,
+        });
+    }
+
+    // ADAT inputs
+    for i in 0..pc.adat.inputs as usize {
+        inputs.push(InputState {
+            index: i as u32,
+            name: format!("ADAT {}", i + 1),
+            input_type: "adat".to_string(),
+            pad: false,
+            air: false,
+            phantom: false,
+            inst: false,
+        });
+    }
 
     // ── Mixer ──────────────────────────────────────────────────
     let num_buses = pc.mix.outputs as usize;
@@ -218,12 +248,18 @@ mod tests {
                 name
             );
 
-            // Inputs match config
+            // Inputs include analogue + S/PDIF + ADAT
+            let expected_inputs = config.port_counts.analogue.inputs as usize
+                + config.port_counts.spdif.inputs as usize
+                + config.port_counts.adat.inputs as usize;
             assert_eq!(
                 state.inputs.len(),
-                config.port_counts.analogue.inputs as usize,
-                "{}: input count mismatch",
-                name
+                expected_inputs,
+                "{}: input count mismatch (expected {} analogue + {} spdif + {} adat)",
+                name,
+                config.port_counts.analogue.inputs,
+                config.port_counts.spdif.inputs,
+                config.port_counts.adat.inputs,
             );
 
             // Mixer dimensions
@@ -272,13 +308,13 @@ mod tests {
 
     #[test]
     fn solo_2i2_no_mixer_no_outputs() {
-        // Solo and 2i2 have no mixer and zero analogue ports
+        // Solo and 2i2 have no mixer and zero port counts
         for pid in &[0x8211u16, 0x8210] {
             let state = mock_state_for_pid(*pid).unwrap();
-            assert!(state.outputs.is_empty());
-            assert!(state.inputs.is_empty());
-            assert!(state.mixer.gains.is_empty());
-            assert!(state.routing.is_empty());
+            assert!(state.outputs.is_empty(), "should have no outputs");
+            assert!(state.inputs.is_empty(), "should have no inputs (all port counts are 0)");
+            assert!(state.mixer.gains.is_empty(), "should have no mixer");
+            assert!(state.routing.is_empty(), "should have no routing");
         }
     }
 

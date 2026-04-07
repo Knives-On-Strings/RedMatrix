@@ -52,6 +52,7 @@ export function mockDeviceState(): DeviceState {
       { index: 9, name: "Headphones 2 R", volume_db: -6, muted: false, hw_controlled: true },
     ],
     inputs: [
+      // Analogue inputs (9 — 8 preamps + talkback mic)
       { index: 0, name: "Analogue 1", type: "analogue", pad: false, air: false, phantom: false, inst: false },
       { index: 1, name: "Analogue 2", type: "analogue", pad: false, air: false, phantom: false, inst: false },
       { index: 2, name: "Analogue 3", type: "analogue", pad: false, air: false, phantom: false, inst: false },
@@ -61,6 +62,18 @@ export function mockDeviceState(): DeviceState {
       { index: 6, name: "Analogue 7", type: "analogue", pad: false, air: false, phantom: false, inst: false },
       { index: 7, name: "Analogue 8", type: "analogue", pad: false, air: false, phantom: false, inst: false },
       { index: 8, name: "Talkback", type: "analogue", pad: false, air: false, phantom: false, inst: false },
+      // S/PDIF inputs (2)
+      { index: 0, name: "S/PDIF L", type: "spdif", pad: false, air: false, phantom: false, inst: false },
+      { index: 1, name: "S/PDIF R", type: "spdif", pad: false, air: false, phantom: false, inst: false },
+      // ADAT inputs (8)
+      { index: 0, name: "ADAT 1", type: "adat", pad: false, air: false, phantom: false, inst: false },
+      { index: 1, name: "ADAT 2", type: "adat", pad: false, air: false, phantom: false, inst: false },
+      { index: 2, name: "ADAT 3", type: "adat", pad: false, air: false, phantom: false, inst: false },
+      { index: 3, name: "ADAT 4", type: "adat", pad: false, air: false, phantom: false, inst: false },
+      { index: 4, name: "ADAT 5", type: "adat", pad: false, air: false, phantom: false, inst: false },
+      { index: 5, name: "ADAT 6", type: "adat", pad: false, air: false, phantom: false, inst: false },
+      { index: 6, name: "ADAT 7", type: "adat", pad: false, air: false, phantom: false, inst: false },
+      { index: 7, name: "ADAT 8", type: "adat", pad: false, air: false, phantom: false, inst: false },
     ],
     mixer: {
       gains: Array.from({ length: 25 }, () => Array.from({ length: 12 }, () => -80.0)),
