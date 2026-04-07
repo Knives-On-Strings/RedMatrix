@@ -1,5 +1,5 @@
 import type { DeviceState, OutputState } from "../../../types";
-import { useMockMeters } from "../../../hooks/useMockMeters";
+import { useDevice } from "../../../hooks/useDevice";
 
 interface OutputLevelsProps {
   state: DeviceState;
@@ -37,8 +37,11 @@ function OutputRow({ output, isInactive, level }: { output: OutputState; isInact
 }
 
 export default function OutputLevels({ state }: OutputLevelsProps) {
+  const { meters } = useDevice();
   const isAlt = state.monitor.speaker_switching === "alt";
-  const meters = useMockMeters(state.outputs.length);
+
+  // Output meters start after input meters in the meter array
+  const inputCount = state.inputs.length;
 
   return (
     <div className="px-4">
@@ -50,7 +53,12 @@ export default function OutputLevels({ state }: OutputLevelsProps) {
           const isInactive = (isAlt && isMainOutput) || (!isAlt && isAltOutput);
 
           return (
-            <OutputRow key={output.index} output={output} isInactive={isInactive} level={meters[i] ?? 0} />
+            <OutputRow
+              key={output.index}
+              output={output}
+              isInactive={isInactive}
+              level={meters[inputCount + i] ?? 0}
+            />
           );
         })}
       </div>

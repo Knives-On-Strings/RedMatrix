@@ -47,6 +47,7 @@ interface DeviceContextValue {
   setInputStereoPairs: (pairs: InputStereoPairConfig[]) => void;
   theme: string;
   setTheme: (themeId: string) => void;
+  meters: Float32Array;
 }
 
 interface DeviceProviderProps {
@@ -71,6 +72,7 @@ export function DeviceProvider(props: DeviceProviderProps) {
   const [stereoPairs, setStereoPairsState] = useState<StereoPairConfig[]>([]);
   const [inputStereoPairs, setInputStereoPairsState] = useState<InputStereoPairConfig[]>([]);
   const [theme, setThemeState] = useState<string>("dark");
+  const [meters, setMeters] = useState<Float32Array>(new Float32Array(0));
 
   // Track the current device serial for config persistence
   const serialRef = useRef<string | null>(null);
@@ -134,6 +136,11 @@ export function DeviceProvider(props: DeviceProviderProps) {
       setState(newState);
     });
 
+    // Subscribe to meter data
+    const unsubMeters = transport.onMeters((meterData) => {
+      setMeters(meterData);
+    });
+
     // Subscribe to server messages (disconnect, reconnect, errors)
     const unsubMessage = transport.onMessage((message) => {
       if (message.type === "device_disconnected") {
@@ -153,6 +160,7 @@ export function DeviceProvider(props: DeviceProviderProps) {
     return () => {
       cancelled = true;
       unsub();
+      unsubMeters();
       unsubMessage();
       // Flush any pending save
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -162,9 +170,7 @@ export function DeviceProvider(props: DeviceProviderProps) {
   const sendCommand = useCallback(async (msg: ClientMessage) => {
     try {
       await transportRef.current.sendCommand(msg);
-      // Re-fetch state after command to reflect the mock handler's mutations
-      const newState = await transportRef.current.getState();
-      setState(newState);
+      // State updates arrive via Tauri "state_update" event (emitted by Rust after handling)
     } catch (e) {
       console.error("Command failed:", e);
       showToast(`Command failed: ${e instanceof Error ? e.message : "unknown error"}`, "error");
@@ -226,7 +232,7 @@ export function DeviceProvider(props: DeviceProviderProps) {
   }, [debouncedSave]);
 
   return (
-    <DeviceContext.Provider value={{ state, loading, error, sendCommand, labels, setLabel, getLabel, stereoPairs, setStereoPairs, inputStereoPairs, setInputStereoPairs, theme, setTheme }}>
+    <DeviceContext.Provider value={{ state, loading, error, sendCommand, labels, setLabel, getLabel, stereoPairs, setStereoPairs, inputStereoPairs, setInputStereoPairs, theme, setTheme, meters }}>
       {children}
     </DeviceContext.Provider>
   );

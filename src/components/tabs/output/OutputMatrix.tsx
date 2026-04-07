@@ -49,6 +49,25 @@ export default function OutputMatrix({ state }: OutputMatrixProps) {
     });
   };
 
+  const handleDirect = () => {
+    // Route PCM 1:1 to outputs (default factory routing)
+    dests.forEach((dest, i) => {
+      sendCommand({
+        type: "set_route",
+        payload: { destination: dest.index, source_type: "pcm", source_index: i },
+      });
+    });
+  };
+
+  const handleClearAll = () => {
+    dests.forEach((dest) => {
+      sendCommand({
+        type: "set_route",
+        payload: { destination: dest.index, source_type: "off", source_index: 0 },
+      });
+    });
+  };
+
   const isActive = (destIdx: number, source: PortDef) => {
     const route = state.routing[destIdx];
     if (!route) return false;
@@ -62,10 +81,10 @@ export default function OutputMatrix({ state }: OutputMatrixProps) {
           Source &rarr; Output ({sources.length} sources &rarr; {dests.length} destinations)
         </h3>
         <div className="flex gap-2">
-          <button className="text-[10px] px-2 py-1 bg-neutral-700 text-neutral-400 rounded hover:bg-neutral-600">
+          <button onClick={handleDirect} className="text-[10px] px-2 py-1 bg-neutral-700 text-neutral-400 rounded hover:bg-neutral-600">
             Direct (1:1)
           </button>
-          <button className="text-[10px] px-2 py-1 bg-neutral-700 text-neutral-400 rounded hover:bg-neutral-600">
+          <button onClick={handleClearAll} className="text-[10px] px-2 py-1 bg-red-900 text-red-300 rounded hover:bg-red-800">
             Clear All
           </button>
         </div>

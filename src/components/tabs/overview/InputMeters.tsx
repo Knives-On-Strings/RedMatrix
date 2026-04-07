@@ -1,5 +1,5 @@
 import type { DeviceState, InputState } from "../../../types";
-import { useMockMeters } from "../../../hooks/useMockMeters";
+import { useDevice } from "../../../hooks/useDevice";
 import MeterBar from "../../MeterBar";
 
 interface InputMetersProps {
@@ -35,16 +35,16 @@ function InputGroup({ label, inputs, levels }: { label: string; inputs: InputSta
 }
 
 export default function InputMeters({ state }: InputMetersProps) {
+  const { meters } = useDevice();
+
   const analogue = state.inputs.filter((i) => i.type === "analogue");
   const spdif = state.inputs.filter((i) => i.type === "spdif");
   const adat = state.inputs.filter((i) => i.type === "adat");
 
-  const totalInputs = analogue.length + spdif.length + adat.length;
-  const meters = useMockMeters(totalInputs);
-
+  // Slice meter data by input group
   const analogueLevels = Array.from(meters.slice(0, analogue.length));
   const spdifLevels = Array.from(meters.slice(analogue.length, analogue.length + spdif.length));
-  const adatLevels = Array.from(meters.slice(analogue.length + spdif.length));
+  const adatLevels = Array.from(meters.slice(analogue.length + spdif.length, analogue.length + spdif.length + adat.length));
 
   return (
     <div className="flex items-end gap-6 px-4">

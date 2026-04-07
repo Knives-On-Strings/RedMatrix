@@ -7,6 +7,7 @@ pub mod tauri_commands;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+use tauri::Emitter;
 use server::state::DeviceState;
 use tauri_commands::AppState;
 
@@ -19,6 +20,22 @@ pub fn run() {
 
     tauri::Builder::default()
         .manage(AppState { device_state })
+        .setup(|app| {
+            // Spawn mock meter emitter — sends meter_data Tauri events at 20Hz
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let mut interval = tokio::time::interval(std::time::Duration::from_millis(50));
+                loop {
+                    interval.tick().await;
+                    // Generate 65 mock meter values
+                    let meters: Vec<f32> = (0..65)
+                        .map(|_| 0.15 + rand::random::<f32>() * 0.3)
+                        .collect();
+                    let _ = handle.emit("meter_data", &meters);
+                }
+            });
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             tauri_commands::greet,
             tauri_commands::get_device_state,

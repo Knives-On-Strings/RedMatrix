@@ -49,10 +49,26 @@ export default function InputMatrix({ state }: InputMatrixProps) {
           Input &rarr; Mixer Bus ({inputCount} sources &rarr; {busCount} buses)
         </h3>
         <div className="flex gap-2">
-          <button className="text-[10px] px-2 py-1 bg-neutral-700 text-neutral-400 rounded hover:bg-neutral-600">
+          <button
+            onClick={() => {
+              for (let ch = 0; ch < inputCount; ch++) {
+                sendCommand({ type: "set_mix_gain", payload: { mix: 0, channel: ch, gain_db: 0 } });
+              }
+            }}
+            className="text-[10px] px-2 py-1 bg-neutral-700 text-neutral-400 rounded hover:bg-neutral-600"
+          >
             Unity Bus A
           </button>
-          <button className="text-[10px] px-2 py-1 bg-neutral-700 text-neutral-400 rounded hover:bg-neutral-600">
+          <button
+            onClick={() => {
+              for (let bus = 0; bus < busCount; bus++) {
+                for (let ch = 0; ch < inputCount; ch++) {
+                  sendCommand({ type: "set_mix_gain", payload: { mix: bus, channel: ch, gain_db: -80 } });
+                }
+              }
+            }}
+            className="text-[10px] px-2 py-1 bg-red-900 text-red-300 rounded hover:bg-red-800"
+          >
             Clear All
           </button>
         </div>

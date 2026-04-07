@@ -6,7 +6,7 @@
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use tauri::State;
+use tauri::{Emitter, State};
 
 use crate::config;
 use crate::server::messages::ClientMessage;
@@ -26,11 +26,12 @@ pub async fn get_device_state(app_state: State<'_, AppState>) -> Result<DeviceSt
     Ok(state.clone())
 }
 
-/// Receive a command from the frontend, apply it to mock state, return changes.
+/// Receive a command from the frontend, apply it to mock state, emit state_update event.
 #[tauri::command]
 pub async fn send_command(
     command: String,
     app_state: State<'_, AppState>,
+    app_handle: tauri::AppHandle,
 ) -> Result<serde_json::Value, String> {
     log::info!("Received command from frontend: {}", command);
 
@@ -38,6 +39,10 @@ pub async fn send_command(
         serde_json::from_str(&command).map_err(|e| format!("Invalid command JSON: {}", e))?;
 
     let changes = mock_handler::handle_command(&app_state.device_state, msg).await?;
+
+    // Emit the updated full state to the frontend via Tauri event
+    let new_state = app_state.device_state.read().await.clone();
+    let _ = app_handle.emit("state_update", &new_state);
 
     Ok(serde_json::to_value(changes).unwrap_or_default())
 }

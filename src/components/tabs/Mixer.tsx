@@ -2,7 +2,6 @@ import { useState } from "react";
 import type { InputState } from "../../types";
 import { useDevice } from "../../hooks/useDevice";
 import { dbToNormalized, normalizedToDb, formatDb, busLabel as busLabelFn } from "../../constants";
-import { useMockMeters } from "../../hooks/useMockMeters";
 import MeterBar from "../MeterBar";
 
 function Fader({ value, onChange }: { value: number; onChange: (v: number) => void }) {
@@ -196,7 +195,7 @@ function BusButton({ isActive, label, customName, onClick, onRename }: {
 }
 
 export default function Mixer() {
-  const { state, loading, sendCommand, getLabel, setLabel } = useDevice();
+  const { state, loading, sendCommand, getLabel, setLabel, meters } = useDevice();
   const [activeBus, setActiveBus] = useState(0);
   const [busMasters, setBusMasters] = useState<Record<number, number>>({});
   const [subAssignments, setSubAssignments] = useState<[number, number, number, number]>([0, 1, 2, 3]);
@@ -254,8 +253,8 @@ export default function Mixer() {
   const analogue = state.inputs.filter((i) => i.type === "analogue");
   const spdif = state.inputs.filter((i) => i.type === "spdif");
   const adat = state.inputs.filter((i) => i.type === "adat");
-  const totalChannels = analogue.length + spdif.length + adat.length;
-  const meterLevels = useMockMeters(totalChannels);
+  // Meter data from Tauri events (sliced to match input channels)
+  const meterLevels = meters;
 
   const handleGainChange = (bus: number, ch: number, db: number) => {
     sendCommand({ type: "set_mix_gain", payload: { mix: bus, channel: ch, gain_db: db } });
@@ -288,6 +287,16 @@ export default function Mixer() {
           />
         ))}
         <span className="text-[9px] text-neutral-600 ml-2 flex-shrink-0">double-click to name</span>
+
+        {/* Clear Solo — visible when any channel is soloed */}
+        {state.mixer.soloed.some((bus) => bus.some((s) => s)) && (
+          <button
+            onClick={() => sendCommand({ type: "clear_solo", payload: {} })}
+            className="ml-2 text-[9px] font-bold px-2 py-1 rounded bg-amber-600 text-black hover:bg-amber-500 flex-shrink-0"
+          >
+            CLEAR SOLO
+          </button>
+        )}
       </div>
 
       {/* Channel strips + bus master */}
