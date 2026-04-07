@@ -391,4 +391,27 @@ Future versions may add new message types (which old clients ignore) or change e
 
 - Meter data: 30-60Hz (server-configurable)
 - State updates: debounced at 100ms — rapid changes (e.g., dragging a fader) are batched
-- Client commands: no rate limit, but the server queues them for sequential USB execution
+- Client commands: no rate limit for most commands, but the server queues them for sequential USB execution
+
+### Hardware Protection (server-enforced)
+
+The following commands have **hard server-side rate limits** to protect the device hardware. These limits cannot be bypassed by any client, regardless of authentication status.
+
+| Command | Cooldown | Reason |
+|---------|----------|--------|
+| `save_config` | 5 minutes | Flash has finite write cycles (~100k). Rapid writes will physically destroy the storage. |
+| `set_sample_rate` | 10 seconds | Causes device re-enumeration and audio interruption. |
+| `set_spdif_mode` | 10 seconds | Causes routing restructure and audio interruption. |
+
+Excess commands within the cooldown are rejected with:
+
+```json
+{
+  "type": "error",
+  "code": "rate_limited",
+  "message": "save_config can only be used once every 5 minutes",
+  "retry_after_ms": 287000
+}
+```
+
+These limits are enforced per-server (not per-client) — if iPad A saves config, iPad B cannot save again until the cooldown expires.
