@@ -1,6 +1,5 @@
-import { useState } from "react";
 import { useDevice } from "../../hooks/useDevice";
-import { THEMES, applyTheme, type Theme } from "../../themes";
+import { THEMES, type Theme } from "../../themes";
 import type { ClockSource } from "../../types";
 
 function SettingRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -55,8 +54,7 @@ function ThemeCard({ theme, isActive, onSelect }: { theme: Theme; isActive: bool
 }
 
 export default function Settings() {
-  const { state, loading, sendCommand } = useDevice();
-  const [activeTheme, setActiveTheme] = useState("dark");
+  const { state, loading, sendCommand, theme: activeTheme, setTheme } = useDevice();
 
   if (loading || !state) {
     return (
@@ -67,11 +65,7 @@ export default function Settings() {
   }
 
   const handleThemeChange = (themeId: string) => {
-    const theme = THEMES[themeId];
-    if (theme) {
-      applyTheme(theme);
-      setActiveTheme(themeId);
-    }
+    setTheme(themeId);
   };
 
   return (

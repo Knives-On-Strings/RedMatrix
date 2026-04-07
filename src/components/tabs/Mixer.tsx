@@ -195,7 +195,6 @@ function BusButton({ isActive, label, customName, onClick, onRename }: {
 export default function Mixer() {
   const { state, loading, sendCommand, getLabel, setLabel } = useDevice();
   const [activeBus, setActiveBus] = useState(0);
-  const [busNames, setBusNames] = useState<Record<number, string>>({});
   const [busMasters, setBusMasters] = useState<Record<number, number>>({});
   const [subAssignments, setSubAssignments] = useState<[number, number, number, number]>([0, 1, 2, 3]);
   const [masterDb, setMasterDb] = useState(0);
@@ -219,7 +218,6 @@ export default function Mixer() {
   const busCount = state.port_counts.mix.outputs;
 
   const handleBusRename = (index: number, name: string) => {
-    setBusNames((prev) => ({ ...prev, [index]: name }));
     setLabel("buses", String(index), name);
   };
 
@@ -279,7 +277,7 @@ export default function Mixer() {
             key={i}
             isActive={activeBus === i}
             label={busLabelFn(i)}
-            customName={getLabel("buses", String(i), busNames[i] ?? "")}
+            customName={getLabel("buses", String(i), "")}
             onClick={() => setActiveBus(i)}
             onRename={(name) => handleBusRename(i, name)}
           />
@@ -352,7 +350,7 @@ export default function Mixer() {
                     className="w-full text-[9px] bg-neutral-700 border border-neutral-600 rounded px-1 py-0.5 text-neutral-300"
                   >
                     {Array.from({ length: Math.min(busCount, 12) }, (_, i) => {
-                      const name = getLabel("buses", String(i), busNames[i] ?? "");
+                      const name = getLabel("buses", String(i), "");
                       return (
                         <option key={i} value={i}>
                           {busLabelFn(i)}{name ? ` ${name}` : ""}

@@ -1,20 +1,14 @@
-import { useState } from "react";
+import { useMemo } from "react";
 import type { DeviceState, OutputState } from "../../../types";
 import { useDevice } from "../../../hooks/useDevice";
+import type { StereoPairConfig } from "../../../hooks/useDevice";
 
 interface OutputConfigProps {
   state: DeviceState;
 }
 
-interface PairState {
-  left: number;
-  right: number;
-  linked: boolean;
-  name: string;
-}
-
-function getDefaultPairs(outputs: OutputState[]): PairState[] {
-  const pairs: PairState[] = [];
+function getDefaultPairs(outputs: OutputState[]): StereoPairConfig[] {
+  const pairs: StereoPairConfig[] = [];
   for (let i = 0; i < outputs.length - 1; i += 2) {
     const left = outputs[i]!;
     const right = outputs[i + 1]!;
@@ -34,7 +28,7 @@ function getDefaultPairs(outputs: OutputState[]): PairState[] {
 }
 
 function StereoPairRow({ pair, leftName, rightName, onToggle, onNameChange }: {
-  pair: PairState;
+  pair: StereoPairConfig;
   leftName: string;
   rightName: string;
   onToggle: () => void;
@@ -149,17 +143,20 @@ function OutputRow({ output, customLabel, onLabelChange, onMuteToggle }: {
 }
 
 export default function OutputConfig({ state }: OutputConfigProps) {
-  const { getLabel, setLabel, sendCommand } = useDevice();
-  const [pairs, setPairs] = useState<PairState[]>(() => getDefaultPairs(state.outputs));
+  const { getLabel, setLabel, sendCommand, stereoPairs, setStereoPairs } = useDevice();
+
+  // Use saved stereo pairs from context, falling back to defaults derived from outputs
+  const defaultPairs = useMemo(() => getDefaultPairs(state.outputs), [state.outputs]);
+  const pairs = stereoPairs.length > 0 ? stereoPairs : defaultPairs;
 
   const handleToggle = (index: number) => {
-    setPairs((prev) => prev.map((p, i) =>
+    setStereoPairs(pairs.map((p, i) =>
       i === index ? { ...p, linked: !p.linked } : p
     ));
   };
 
   const handleNameChange = (index: number, name: string) => {
-    setPairs((prev) => prev.map((p, i) =>
+    setStereoPairs(pairs.map((p, i) =>
       i === index ? { ...p, name } : p
     ));
   };
