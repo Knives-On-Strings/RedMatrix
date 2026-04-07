@@ -1,4 +1,6 @@
 import DeviceSelector from "./DeviceSelector";
+import { useDevice } from "../hooks/useDevice";
+import { formatDb } from "../constants";
 
 interface HeaderProps {
   onSettingsClick: () => void;
@@ -7,6 +9,16 @@ interface HeaderProps {
 }
 
 export default function Header({ onSettingsClick, onAboutClick, onDeviceSwitch }: HeaderProps) {
+  const { state, sendCommand } = useDevice();
+
+  const dim = state?.monitor.dim ?? false;
+  const mute = state?.monitor.mute ?? false;
+  const talkback = state?.monitor.talkback ?? false;
+  const speakerMode = state?.monitor.speaker_switching ?? "main";
+  const masterVolumeDb = state?.monitor.master_volume_db ?? 0;
+  const hasTalkback = state?.features.has_talkback ?? false;
+  const hasSpeakerSwitching = state?.features.has_speaker_switching ?? false;
+
   return (
     <header className="flex items-center justify-between px-4 py-2 bg-neutral-800 border-b border-neutral-700">
       {/* Left: connection + device selector */}
@@ -18,19 +30,59 @@ export default function Header({ onSettingsClick, onAboutClick, onDeviceSwitch }
         <DeviceSelector onDeviceSwitch={onDeviceSwitch} />
       </div>
 
-      {/* Center: transport buttons */}
+      {/* Center: monitor buttons */}
       <div className="flex items-center gap-2">
-        <HeaderButton label="TALK" />
-        <HeaderButton label="MAIN" />
-        <HeaderButton label="DIM" />
-        <HeaderButton label="MUTE" />
+        {hasTalkback && (
+          <button
+            onClick={() => sendCommand({ type: "set_talkback", payload: { enabled: !talkback } })}
+            className={`px-3 py-1 text-xs font-bold rounded transition-colors ${
+              talkback
+                ? "bg-amber-500 text-black"
+                : "bg-neutral-700 text-neutral-400 hover:bg-neutral-600"
+            }`}
+          >
+            TALK
+          </button>
+        )}
+        {hasSpeakerSwitching && (
+          <button
+            onClick={() => sendCommand({ type: "set_speaker_switching", payload: { mode: speakerMode === "main" ? "alt" : "main" } })}
+            className={`px-3 py-1 text-xs font-bold rounded transition-colors ${
+              speakerMode === "alt"
+                ? "bg-blue-500 text-white"
+                : "bg-neutral-700 text-neutral-400 hover:bg-neutral-600"
+            }`}
+          >
+            {speakerMode === "main" ? "MAIN" : "ALT"}
+          </button>
+        )}
+        <button
+          onClick={() => sendCommand({ type: "set_dim", payload: { enabled: !dim } })}
+          className={`px-3 py-1 text-xs font-bold rounded transition-colors ${
+            dim
+              ? "bg-amber-500 text-black"
+              : "bg-neutral-700 text-neutral-400 hover:bg-neutral-600"
+          }`}
+        >
+          DIM
+        </button>
+        <button
+          onClick={() => sendCommand({ type: "set_mute", payload: { enabled: !mute } })}
+          className={`px-3 py-1 text-xs font-bold rounded transition-colors ${
+            mute
+              ? "bg-red-600 text-white"
+              : "bg-neutral-700 text-neutral-400 hover:bg-neutral-600"
+          }`}
+        >
+          MUTE
+        </button>
       </div>
 
       {/* Right: volume readout + settings/about */}
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2">
           <span className="text-xs text-neutral-500">MON</span>
-          <span className="text-sm text-neutral-300 font-mono">0 dB</span>
+          <span className="text-sm text-neutral-300 font-mono">{formatDb(masterVolumeDb)} dB</span>
         </div>
 
         <div className="w-px h-5 bg-neutral-700" />
@@ -58,13 +110,5 @@ export default function Header({ onSettingsClick, onAboutClick, onDeviceSwitch }
         </button>
       </div>
     </header>
-  );
-}
-
-function HeaderButton({ label }: { label: string }) {
-  return (
-    <button className="px-3 py-1 text-xs font-bold rounded bg-neutral-700 text-neutral-400 hover:bg-neutral-600 transition-colors">
-      {label}
-    </button>
   );
 }

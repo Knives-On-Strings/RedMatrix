@@ -1,4 +1,5 @@
 import type { DeviceState } from "../../../types";
+import { useDevice } from "../../../hooks/useDevice";
 import { busLabel } from "../../../constants";
 import GainCell from "../../GainCell";
 
@@ -30,8 +31,15 @@ export default function InputMatrix({ state }: InputMatrixProps) {
     inputLabels.push(`DAW Out ${inputLabels.length - analogue.length - spdif.length - adat.length + 1}`);
   }
 
-  const handleCellClick = (_bus: number, _channel: number) => {
-    // TODO: toggle gain or open editor
+  const { sendCommand, state: deviceState } = useDevice();
+
+  const handleCellClick = (bus: number, channel: number) => {
+    const currentGain = deviceState?.mixer.gains[bus]?.[channel] ?? -80;
+    const newGain = currentGain > -80 ? -80 : 0;
+    sendCommand({
+      type: "set_mix_gain",
+      payload: { mix: bus, channel, gain_db: newGain },
+    });
   };
 
   return (

@@ -1,4 +1,5 @@
 import type { DeviceState } from "../../../types";
+import { useDevice } from "../../../hooks/useDevice";
 import { buildSourceList, buildDestList, type PortDef } from "../../../utils/routing";
 
 interface OutputMatrixProps {
@@ -33,11 +34,19 @@ export default function OutputMatrix({ state }: OutputMatrixProps) {
     );
   }
 
+  const { sendCommand } = useDevice();
   const sources = buildSourceList(state);
   const dests = buildDestList(state);
 
-  const handleCellClick = (_destIdx: number, _source: PortDef) => {
-    // TODO: send set_route via transport
+  const handleCellClick = (destIdx: number, source: PortDef) => {
+    sendCommand({
+      type: "set_route",
+      payload: {
+        destination: destIdx,
+        source_type: source.type,
+        source_index: source.index,
+      },
+    });
   };
 
   const isActive = (destIdx: number, source: PortDef) => {

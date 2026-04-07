@@ -101,10 +101,11 @@ function StereoPairRow({ pair, leftName, rightName, onToggle, onNameChange }: {
   );
 }
 
-function OutputRow({ output, customLabel, onLabelChange }: {
+function OutputRow({ output, customLabel, onLabelChange, onMuteToggle }: {
   output: OutputState;
   customLabel: string;
   onLabelChange: (value: string) => void;
+  onMuteToggle: () => void;
 }) {
   return (
     <div className="flex items-center gap-3 py-2 border-b border-neutral-800 last:border-0">
@@ -119,9 +120,12 @@ function OutputRow({ output, customLabel, onLabelChange }: {
       </div>
 
       <div className="flex items-center gap-1.5">
-        <button className={`text-[9px] font-bold px-2 py-0.5 rounded ${
-          output.muted ? "bg-red-600 text-white" : "bg-neutral-700 text-neutral-500 hover:bg-neutral-600"
-        }`}>
+        <button
+          onClick={onMuteToggle}
+          className={`text-[9px] font-bold px-2 py-0.5 rounded ${
+            output.muted ? "bg-red-600 text-white" : "bg-neutral-700 text-neutral-500 hover:bg-neutral-600"
+          }`}
+        >
           MUTE
         </button>
         <span className={`text-[9px] px-1.5 py-0.5 rounded ${
@@ -145,7 +149,7 @@ function OutputRow({ output, customLabel, onLabelChange }: {
 }
 
 export default function OutputConfig({ state }: OutputConfigProps) {
-  const { getLabel, setLabel } = useDevice();
+  const { getLabel, setLabel, sendCommand } = useDevice();
   const [pairs, setPairs] = useState<PairState[]>(() => getDefaultPairs(state.outputs));
 
   const handleToggle = (index: number) => {
@@ -190,6 +194,7 @@ export default function OutputConfig({ state }: OutputConfigProps) {
             output={output}
             customLabel={getLabel("outputs", `analogue_${output.index}`, "")}
             onLabelChange={(v) => setLabel("outputs", `analogue_${output.index}`, v)}
+            onMuteToggle={() => sendCommand({ type: "set_output_mute", payload: { index: output.index, muted: !output.muted } })}
           />
         ))}
       </div>

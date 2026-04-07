@@ -38,11 +38,13 @@ function ChannelStrip({ input, gainDb, soloed, muted, onGainChange, onSoloToggle
   onMuteToggle: () => void;
 }) {
   const level = mockMeterLevel();
-  const label = input.type === "spdif"
+  const { getLabel } = useDevice();
+  const defaultLabel = input.type === "spdif"
     ? `S/${input.index === 0 ? "L" : "R"}`
     : input.type === "adat"
     ? `AD${input.index + 1}`
     : `${input.index + 1}`;
+  const label = getLabel("inputs", `${input.type}_${input.index}`, defaultLabel);
 
   return (
     <div className={`flex flex-col items-center gap-1.5 px-1 py-2 rounded ${soloed ? "bg-amber-900/20" : ""}`}>
@@ -191,7 +193,7 @@ function BusButton({ isActive, label, customName, onClick, onRename }: {
 }
 
 export default function Mixer() {
-  const { state, loading, sendCommand } = useDevice();
+  const { state, loading, sendCommand, getLabel, setLabel } = useDevice();
   const [activeBus, setActiveBus] = useState(0);
   const [busNames, setBusNames] = useState<Record<number, string>>({});
   const [busMasters, setBusMasters] = useState<Record<number, number>>({});
@@ -218,12 +220,14 @@ export default function Mixer() {
 
   const handleBusRename = (index: number, name: string) => {
     setBusNames((prev) => ({ ...prev, [index]: name }));
-    // TODO: persist to local config file
+    setLabel("buses", String(index), name);
   };
 
   const handleBusMasterChange = (busIndex: number, db: number) => {
     setBusMasters((prev) => ({ ...prev, [busIndex]: db }));
-    // TODO: apply as offset to all crosspoint gains for this bus via transport
+    // TODO: Bus master is a UI-only dB offset for now. Proper implementation
+    // requires the backend state manager to apply the offset to all active
+    // crosspoint gains in the bus before sending individual SET_MIX commands.
   };
 
   const handleSubAssignment = (subIndex: number, busIndex: number) => {
@@ -236,7 +240,9 @@ export default function Mixer() {
 
   const handleMasterChange = (db: number) => {
     setMasterDb(db);
-    // TODO: apply as global offset to all bus masters via transport
+    // TODO: Master fader is a UI-only global dB offset for now. Proper
+    // implementation requires backend support to apply a global offset
+    // across all bus masters before sending per-channel SET_MIX commands.
   };
 
   const busGains = state.mixer.gains[activeBus] ?? [];
@@ -273,7 +279,7 @@ export default function Mixer() {
             key={i}
             isActive={activeBus === i}
             label={busLabelFn(i)}
-            customName={busNames[i] ?? ""}
+            customName={getLabel("buses", String(i), busNames[i] ?? "")}
             onClick={() => setActiveBus(i)}
             onRename={(name) => handleBusRename(i, name)}
           />
@@ -345,11 +351,14 @@ export default function Mixer() {
                     onChange={(e) => handleSubAssignment(subIdx, Number(e.target.value))}
                     className="w-full text-[9px] bg-neutral-700 border border-neutral-600 rounded px-1 py-0.5 text-neutral-300"
                   >
-                    {Array.from({ length: Math.min(busCount, 12) }, (_, i) => (
-                      <option key={i} value={i}>
-                        {busLabelFn(i)}{busNames[i] ? ` ${busNames[i]}` : ""}
-                      </option>
-                    ))}
+                    {Array.from({ length: Math.min(busCount, 12) }, (_, i) => {
+                      const name = getLabel("buses", String(i), busNames[i] ?? "");
+                      return (
+                        <option key={i} value={i}>
+                          {busLabelFn(i)}{name ? ` ${name}` : ""}
+                        </option>
+                      );
+                    })}
                   </select>
 
                   <div className="flex gap-1 items-end">
