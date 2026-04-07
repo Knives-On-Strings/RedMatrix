@@ -4,15 +4,15 @@ import Footer from "./components/Footer";
 import TabBar, { type TabName } from "./components/TabBar";
 import Overview from "./components/tabs/Overview";
 import Mixer from "./components/tabs/Mixer";
-import Patchbay from "./components/tabs/Routing";
-import Matrix from "./components/tabs/Matrix";
+import Input from "./components/tabs/Input";
+import Output from "./components/tabs/Output";
 import Settings from "./components/tabs/Settings";
 
 const TAB_COMPONENTS: Record<TabName, React.FC> = {
   Overview,
   Mixer,
-  Patchbay,
-  Matrix,
+  Input,
+  Output,
   Settings,
 };
 

@@ -13,7 +13,7 @@ describe("App", () => {
     const nav = screen.getByRole("navigation");
     expect(nav).toBeDefined();
     const buttons = screen.getAllByRole("button");
-    const tabNames = ["Overview", "Mixer", "Patchbay", "Matrix", "Settings"];
+    const tabNames = ["Overview", "Mixer", "Input", "Output", "Settings"];
     for (const name of tabNames) {
       expect(buttons.some((b) => b.textContent === name)).toBe(true);
     }
