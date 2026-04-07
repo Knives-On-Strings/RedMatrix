@@ -1,7 +1,33 @@
+import { useState } from "react";
+import Header from "./components/Header";
+import Footer from "./components/Footer";
+import TabBar, { type TabName } from "./components/TabBar";
+import Overview from "./components/tabs/Overview";
+import Mixer from "./components/tabs/Mixer";
+import Routing from "./components/tabs/Routing";
+import Matrix from "./components/tabs/Matrix";
+import Settings from "./components/tabs/Settings";
+
+const TAB_COMPONENTS: Record<TabName, React.FC> = {
+  Overview,
+  Mixer,
+  Routing,
+  Matrix,
+  Settings,
+};
+
 function App() {
+  const [activeTab, setActiveTab] = useState<TabName>("Overview");
+  const ActiveComponent = TAB_COMPONENTS[activeTab];
+
   return (
-    <div className="min-h-screen bg-neutral-900 text-neutral-100 flex items-center justify-center">
-      <h1 className="text-2xl font-bold">RedMatrix</h1>
+    <div className="min-h-screen bg-neutral-900 text-neutral-100 flex flex-col">
+      <Header />
+      <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
+      <main className="flex-1">
+        <ActiveComponent />
+      </main>
+      <Footer />
     </div>
   );
 }

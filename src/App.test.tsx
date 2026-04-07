@@ -1,10 +1,37 @@
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import App from "./App";
 
 describe("App", () => {
-  it("renders the app title", () => {
+  it("renders the header with connection status", () => {
     render(<App />);
-    expect(screen.getByText("RedMatrix")).toBeDefined();
+    expect(screen.getByText("No device")).toBeDefined();
+  });
+
+  it("renders all five tab buttons", () => {
+    render(<App />);
+    const nav = screen.getByRole("navigation");
+    expect(nav).toBeDefined();
+    const buttons = screen.getAllByRole("button");
+    const tabNames = ["Overview", "Mixer", "Routing", "Matrix", "Settings"];
+    for (const name of tabNames) {
+      expect(buttons.some((b) => b.textContent === name)).toBe(true);
+    }
+  });
+
+  it("shows Overview tab content by default", () => {
+    render(<App />);
+    expect(screen.getByText("Front panel LEDs, input meters, output levels, status widgets")).toBeDefined();
+  });
+
+  it("switches tabs when clicked", () => {
+    render(<App />);
+    fireEvent.click(screen.getByText("Mixer"));
+    expect(screen.getByText("Channel strips with faders, VU meters, mute/solo, pan")).toBeDefined();
+  });
+
+  it("renders the footer", () => {
+    render(<App />);
+    expect(screen.getByText("RedMatrix v0.1.0")).toBeDefined();
   });
 });
