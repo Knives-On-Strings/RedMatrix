@@ -31,6 +31,8 @@ pub enum CryptoError {
     EncryptionFailed,
     #[error("decryption failed")]
     DecryptionFailed,
+    #[error("replayed frame counter detected")]
+    ReplayDetected,
     #[error("invalid key data: {0}")]
     InvalidKeyData(String),
     #[error("IO error: {0}")]
@@ -230,6 +232,7 @@ impl SessionCrypto {
     /// Decrypt a client-to-server frame.
     ///
     /// Expects `[counter:8 LE][ciphertext+tag]`.
+    /// Rejects frames with a counter less than the expected value (replay protection).
     pub fn decrypt_client_frame(&mut self, frame: &[u8]) -> Result<Vec<u8>, CryptoError> {
         if frame.len() < 8 {
             return Err(CryptoError::DecryptionFailed);
@@ -242,12 +245,18 @@ impl SessionCrypto {
         );
         let ciphertext_and_tag = &frame[8..];
 
+        // Reject replayed (old) frame counters
+        if counter < self.client_frame_counter {
+            return Err(CryptoError::ReplayDetected);
+        }
+
         let nonce = Self::build_nonce(&self.client_iv, counter);
         let plaintext = self
             .client_cipher
             .decrypt(Nonce::from_slice(&nonce), ciphertext_and_tag)
             .map_err(|_| CryptoError::DecryptionFailed)?;
 
+        // Only update counter after successful decryption
         self.client_frame_counter = counter + 1;
         Ok(plaintext)
     }
@@ -637,6 +646,48 @@ mod tests {
         assert_eq!(loaded.devices().len(), 1);
 
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn replayed_frame_counter_rejected() {
+        let (mut server_session, client_session) = make_session_pair();
+
+        // Encrypt two client frames (counter 0 and counter 1)
+        let nonce0 = SessionCrypto::build_nonce(&client_session.client_iv, 0);
+        let ct0 = client_session
+            .client_cipher
+            .encrypt(Nonce::from_slice(&nonce0), b"frame zero".as_ref())
+            .unwrap();
+        let mut frame0 = Vec::new();
+        frame0.extend_from_slice(&0u64.to_le_bytes());
+        frame0.extend_from_slice(&ct0);
+
+        let nonce1 = SessionCrypto::build_nonce(&client_session.client_iv, 1);
+        let ct1 = client_session
+            .client_cipher
+            .encrypt(Nonce::from_slice(&nonce1), b"frame one".as_ref())
+            .unwrap();
+        let mut frame1 = Vec::new();
+        frame1.extend_from_slice(&1u64.to_le_bytes());
+        frame1.extend_from_slice(&ct1);
+
+        // Decrypt frame 0 — should succeed
+        let result = server_session.decrypt_client_frame(&frame0);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), b"frame zero");
+
+        // Decrypt frame 1 — should succeed
+        let result = server_session.decrypt_client_frame(&frame1);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), b"frame one");
+
+        // Replay frame 0 — should be rejected
+        let result = server_session.decrypt_client_frame(&frame0);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            CryptoError::ReplayDetected => {} // expected
+            other => panic!("expected ReplayDetected, got: {:?}", other),
+        }
     }
 
     #[test]

@@ -24,7 +24,9 @@
       "Bash(python scripts/01_enumerate.py)",
       "Bash(python scripts/02_claim_test.py)",
       "Bash(python scripts/03_read_state.py)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(cargo build:*)",
+      "Bash(cargo check:*)"
     ]
   }
 }

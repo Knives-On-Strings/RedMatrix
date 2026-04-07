@@ -27,6 +27,9 @@ pub struct ServerConfig {
     pub keypair_path: PathBuf,
     pub paired_devices_path: PathBuf,
     pub max_saves_per_hour: u32,
+    /// When true, clients must present a public key that is in the paired device store.
+    /// When false (dev mode), all clients are auto-accepted and encryption is skipped.
+    pub require_pairing: bool,
 }
 
 impl Default for ServerConfig {
@@ -37,6 +40,7 @@ impl Default for ServerConfig {
             keypair_path: PathBuf::from("server_keys.json"),
             paired_devices_path: PathBuf::from("paired_devices.json"),
             max_saves_per_hour: 12,
+            require_pairing: false,
         }
     }
 }
@@ -49,6 +53,11 @@ pub struct ServerHandle {
     pub shutdown_tx: Option<oneshot::Sender<()>>,
     pub state: Arc<RwLock<state::DeviceState>>,
     pub command_rx: mpsc::Receiver<session::ClientCommand>,
+    /// Keep the mDNS daemon alive for the lifetime of the server.
+    _mdns_daemon: Option<mdns_sd::ServiceDaemon>,
+    /// Send `true` to stop the meter task. Kept alive so callers can signal shutdown.
+    #[allow(dead_code)]
+    meter_stop_tx: Option<tokio::sync::watch::Sender<bool>>,
 }
 
 // ── Errors ─────────────────────────────────────────────────────────
@@ -99,17 +108,21 @@ pub async fn start_server(config: ServerConfig) -> Result<ServerHandle, ServerEr
     let (command_tx, command_rx) = mpsc::channel::<session::ClientCommand>(64);
 
     // 6. Bind TCP listener
-    let tcp_listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", config.port))
+    // Use 127.0.0.1 (localhost only) during development.
+    // Change to "0.0.0.0" when pairing is implemented to allow remote connections.
+    let bind_addr = "127.0.0.1";
+    let tcp_listener = tokio::net::TcpListener::bind(format!("{}:{}", bind_addr, config.port))
         .await
         .map_err(|e| ServerError::BindFailed {
             port: config.port,
             source: e,
         })?;
 
-    log::info!("WebSocket server listening on port {}", config.port);
+    log::info!("WebSocket server listening on {}:{}", bind_addr, config.port);
 
     // 7. Spawn listener task
     let (shutdown_tx, shutdown_rx) = oneshot::channel();
+    let require_pairing = config.require_pairing;
 
     tokio::spawn(listener::listen(
         tcp_listener,
@@ -119,38 +132,51 @@ pub async fn start_server(config: ServerConfig) -> Result<ServerHandle, ServerEr
         broadcast_handle.clone(),
         command_tx,
         shutdown_rx,
+        require_pairing,
     ));
 
     // 8. Spawn mDNS (best-effort, don't fail if it can't start)
     let fingerprint = keypair.fingerprint().to_string();
-    match mdns::advertise(config.port, &config.server_name, &fingerprint) {
-        Ok(_daemon) => {
+    let mdns_daemon = match mdns::advertise(config.port, &config.server_name, &fingerprint) {
+        Ok(daemon) => {
             log::info!(
                 "mDNS: advertising _redmatrix._tcp on port {}",
                 config.port
             );
-            // Note: daemon is dropped here, which stops advertising.
-            // In production, store it in ServerHandle. For now, mDNS is best-effort.
+            Some(daemon)
         }
         Err(e) => {
             log::warn!("mDNS: failed to advertise: {}", e);
+            None
         }
     };
 
     // 9. Spawn mock meter task (generates fake meter data at ~30 Hz)
     let meter_broadcast = broadcast_handle.clone();
+    let (meter_stop_tx, mut meter_stop_rx) = tokio::sync::watch::channel(false);
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(std::time::Duration::from_millis(33));
         loop {
-            interval.tick().await;
-            // Generate fake meter data: 65 channels of a quiet signal
-            let meter_data: Vec<u8> = (0..65)
-                .flat_map(|_| {
-                    let val: f32 = 0.1;
-                    val.to_le_bytes().to_vec()
-                })
-                .collect();
-            let _ = meter_broadcast.send_meters(meter_data);
+            tokio::select! {
+                _ = interval.tick() => {
+                    // Generate fake meter data: 65 channels of a quiet signal
+                    let meter_data: Vec<u8> = (0..65)
+                        .flat_map(|_| {
+                            let val: f32 = 0.1;
+                            val.to_le_bytes().to_vec()
+                        })
+                        .collect();
+                    // Stop if no receivers remain
+                    if meter_broadcast.send_meters(meter_data).is_err() {
+                        break;
+                    }
+                }
+                _ = meter_stop_rx.changed() => {
+                    if *meter_stop_rx.borrow() {
+                        break;
+                    }
+                }
+            }
         }
     });
 
@@ -158,6 +184,8 @@ pub async fn start_server(config: ServerConfig) -> Result<ServerHandle, ServerEr
         shutdown_tx: Some(shutdown_tx),
         state,
         command_rx,
+        _mdns_daemon: mdns_daemon,
+        meter_stop_tx: Some(meter_stop_tx),
     })
 }
 

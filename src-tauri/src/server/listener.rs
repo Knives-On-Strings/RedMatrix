@@ -25,6 +25,7 @@ pub async fn listen(
     broadcast: BroadcastHandle,
     command_tx: mpsc::Sender<ClientCommand>,
     mut shutdown_rx: oneshot::Receiver<()>,
+    require_pairing: bool,
 ) {
     let semaphore = Arc::new(Semaphore::new(MAX_CONNECTIONS));
 
@@ -51,7 +52,7 @@ pub async fn listen(
                             match accept_async(stream).await {
                                 Ok(ws_stream) => {
                                     log::info!("Client connected: {}", addr);
-                                    session::run(ws_stream, kp, ps, st, bc, ctx).await;
+                                    session::run(ws_stream, kp, ps, st, bc, ctx, require_pairing).await;
                                     log::info!("Client disconnected: {}", addr);
                                 }
                                 Err(e) => {
@@ -105,6 +106,7 @@ mod tests {
             broadcast,
             command_tx,
             shutdown_rx,
+            false,
         ));
 
         // Connect as client
@@ -142,6 +144,7 @@ mod tests {
             broadcast,
             command_tx,
             shutdown_rx,
+            false,
         ));
 
         // Send shutdown

@@ -98,13 +98,14 @@ function ChannelStrip({ input, gainDb, soloed, muted, onGainChange, onSoloToggle
   );
 }
 
-function ChannelGroup({ label, inputs, gains, solos, mutes, busIndex, onGainChange, onSoloToggle, onMuteToggle }: {
+function ChannelGroup({ label, inputs, gains, solos, mutes, busIndex, indexOffset, onGainChange, onSoloToggle, onMuteToggle }: {
   label: string;
   inputs: InputState[];
   gains: number[];
   solos: boolean[];
   mutes: boolean[];
   busIndex: number;
+  indexOffset: number;
   onGainChange: (bus: number, ch: number, db: number) => void;
   onSoloToggle: (bus: number, ch: number) => void;
   onMuteToggle: (bus: number, ch: number) => void;
@@ -121,9 +122,9 @@ function ChannelGroup({ label, inputs, gains, solos, mutes, busIndex, onGainChan
             gainDb={gains[i] ?? -80}
             soloed={solos[i] ?? false}
             muted={mutes[i] ?? false}
-            onGainChange={(db) => onGainChange(busIndex, i, db)}
-            onSoloToggle={() => onSoloToggle(busIndex, i)}
-            onMuteToggle={() => onMuteToggle(busIndex, i)}
+            onGainChange={(db) => onGainChange(busIndex, indexOffset + i, db)}
+            onSoloToggle={() => onSoloToggle(busIndex, indexOffset + i)}
+            onMuteToggle={() => onMuteToggle(busIndex, indexOffset + i)}
           />
         ))}
       </div>
@@ -299,6 +300,7 @@ export default function Mixer() {
             solos={busSolos.slice(0, analogue.length)}
             mutes={busMutes.slice(0, analogue.length)}
             busIndex={activeBus}
+            indexOffset={0}
             onGainChange={handleGainChange}
             onSoloToggle={handleSoloToggle}
             onMuteToggle={handleMuteToggle}
@@ -313,6 +315,7 @@ export default function Mixer() {
                 solos={busSolos.slice(analogue.length, analogue.length + spdif.length)}
                 mutes={busMutes.slice(analogue.length, analogue.length + spdif.length)}
                 busIndex={activeBus}
+                indexOffset={analogue.length}
                 onGainChange={handleGainChange}
                 onSoloToggle={handleSoloToggle}
                 onMuteToggle={handleMuteToggle}
@@ -329,6 +332,7 @@ export default function Mixer() {
                 solos={busSolos.slice(analogue.length + spdif.length)}
                 mutes={busMutes.slice(analogue.length + spdif.length)}
                 busIndex={activeBus}
+                indexOffset={analogue.length + spdif.length}
                 onGainChange={handleGainChange}
                 onSoloToggle={handleSoloToggle}
                 onMuteToggle={handleMuteToggle}

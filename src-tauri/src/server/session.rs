@@ -16,8 +16,11 @@ use tokio::time::{timeout, Duration};
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::WebSocketStream;
 
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+use p256::elliptic_curve::sec1::FromEncodedPoint;
+
 use super::broadcast::BroadcastHandle;
-use super::crypto::{CryptoError, PairedDeviceStore, ServerKeypair};
+use super::crypto::{CryptoError, PairedDeviceStore, SessionCrypto, ServerKeypair};
 use super::messages::{ClientMessage, ServerMessage};
 use super::state::DeviceState;
 
@@ -59,8 +62,9 @@ pub async fn run(
     state: Arc<RwLock<DeviceState>>,
     broadcast: BroadcastHandle,
     command_tx: mpsc::Sender<ClientCommand>,
+    require_pairing: bool,
 ) {
-    if let Err(e) = run_inner(ws_stream, keypair, paired_store, state, broadcast, command_tx).await
+    if let Err(e) = run_inner(ws_stream, keypair, paired_store, state, broadcast, command_tx, require_pairing).await
     {
         log::warn!("Session ended: {}", e);
     }
@@ -71,14 +75,15 @@ pub async fn run(
 async fn run_inner(
     ws_stream: WebSocketStream<TcpStream>,
     keypair: Arc<ServerKeypair>,
-    _paired_store: Arc<RwLock<PairedDeviceStore>>,
+    paired_store: Arc<RwLock<PairedDeviceStore>>,
     state: Arc<RwLock<DeviceState>>,
     broadcast: BroadcastHandle,
     command_tx: mpsc::Sender<ClientCommand>,
+    require_pairing: bool,
 ) -> Result<(), SessionError> {
     let (mut write, mut read) = ws_stream.split();
 
-    // 1. Send ServerHello (plaintext)
+    // 1. Send ServerHello (plaintext — always unencrypted for key exchange)
     let device_name = state.read().await.device.name.clone();
     let server_hello = ServerMessage::ServerHello {
         version: 1,
@@ -109,17 +114,40 @@ async fn run_inner(
         }
     };
 
-    // Validate that it's actually a ClientHello
-    match &client_msg {
-        ClientMessage::ClientHello { .. } => {}
+    // Validate that it's actually a ClientHello and extract fields
+    let (client_pubkey_b64, _client_name) = match &client_msg {
+        ClientMessage::ClientHello {
+            client_pubkey,
+            client_name,
+            ..
+        } => (client_pubkey.clone(), client_name.clone()),
         _ => {
             return Err(SessionError::InvalidMessage(
                 "expected client_hello".to_string(),
             ))
         }
-    }
+    };
 
-    // 3. Auth result — auto-accept for now (pairing UI comes later)
+    // 3. Auth check
+    if require_pairing {
+        // Parse client public key and check against paired store
+        let client_pk = parse_client_public_key(&client_pubkey_b64)?;
+        let client_fingerprint = compute_client_fingerprint(&client_pk);
+        let store = paired_store.read().await;
+        if !store.is_paired(&client_fingerprint) {
+            let reject = ServerMessage::AuthResult {
+                status: "rejected".to_string(),
+                reason: Some("unknown device — pair first".to_string()),
+            };
+            let reject_json = serde_json::to_string(&reject)?;
+            let _ = write.send(Message::Text(reject_json.into())).await;
+            return Err(SessionError::InvalidMessage(
+                "client not paired".to_string(),
+            ));
+        }
+    }
+    // Dev mode (require_pairing == false): auto-accept all clients
+
     let auth_ok = ServerMessage::AuthResult {
         status: "ok".to_string(),
         reason: None,
@@ -130,18 +158,29 @@ async fn run_inner(
         .await
         .map_err(|e| SessionError::WebSocket(e.to_string()))?;
 
-    // 4. Send full device state
+    // 4. Derive session encryption (only when pairing is required)
+    let mut session_crypto: Option<SessionCrypto> = if require_pairing {
+        let client_pk = parse_client_public_key(&client_pubkey_b64)?;
+        let crypto = SessionCrypto::derive(
+            keypair.secret_key(),
+            keypair.public_key(),
+            &client_pk,
+        )
+        .map_err(SessionError::Crypto)?;
+        Some(crypto)
+    } else {
+        None
+    };
+
+    // 5. Send full device state
     let device_state = state.read().await.clone();
     let state_msg = ServerMessage::DeviceState {
         state: serde_json::to_value(&device_state).unwrap_or_default(),
     };
     let state_json = serde_json::to_string(&state_msg)?;
-    write
-        .send(Message::Text(state_json.into()))
-        .await
-        .map_err(|e| SessionError::WebSocket(e.to_string()))?;
+    send_message(&mut write, &mut session_crypto, &state_json).await?;
 
-    // 5. Message loop
+    // 6. Message loop
     let mut update_rx = broadcast.subscribe_updates();
     let mut meter_rx = broadcast.subscribe_meters();
 
@@ -149,11 +188,11 @@ async fn run_inner(
         tokio::select! {
             // Client message
             msg = read.next() => {
-                match msg {
-                    Some(Ok(Message::Text(ref text))) => {
-                        match serde_json::from_str::<ClientMessage>(text) {
+                let parsed = recv_message(msg, &mut session_crypto)?;
+                match parsed {
+                    RecvResult::Text(text) => {
+                        match serde_json::from_str::<ClientMessage>(&text) {
                             Ok(ClientMessage::Ping) => {
-                                // Respond to ping directly, don't forward
                                 let now = SystemTime::now()
                                     .duration_since(UNIX_EPOCH)
                                     .unwrap_or_default()
@@ -161,7 +200,7 @@ async fn run_inner(
                                 let pong = ServerMessage::Pong { timestamp: now };
                                 let pong_json = serde_json::to_string(&pong)
                                     .unwrap_or_default();
-                                let _ = write.send(Message::Text(pong_json.into())).await;
+                                send_message(&mut write, &mut session_crypto, &pong_json).await?;
                             }
                             Ok(cmd) => {
                                 let _ = command_tx.send(ClientCommand { message: cmd }).await;
@@ -171,19 +210,15 @@ async fn run_inner(
                             }
                         }
                     }
-                    Some(Ok(Message::Close(_))) | None => break,
-                    Some(Err(e)) => {
-                        log::warn!("WebSocket read error: {}", e);
-                        break;
-                    }
-                    _ => {} // Binary, Ping/Pong frames handled by tungstenite
+                    RecvResult::Close => break,
+                    RecvResult::Skip => {}
                 }
             }
             // Broadcast state update
             update = update_rx.recv() => {
                 match update {
                     Ok(json) => {
-                        let _ = write.send(Message::Text(json.into())).await;
+                        let _ = send_message(&mut write, &mut session_crypto, &json).await;
                     }
                     Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
                         log::warn!("Session lagged, missed {} update(s)", n);
@@ -206,6 +241,106 @@ async fn run_inner(
         }
     }
 
+    Ok(())
+}
+
+// ── Helpers ────────────────────────────────────────────────────────
+
+/// Parse a base64-encoded SEC1 public key from the client_hello message.
+fn parse_client_public_key(b64: &str) -> Result<p256::PublicKey, SessionError> {
+    let bytes = BASE64
+        .decode(b64)
+        .map_err(|e| SessionError::InvalidMessage(format!("bad base64 public key: {e}")))?;
+    let encoded_point = p256::EncodedPoint::from_bytes(&bytes)
+        .map_err(|e| SessionError::InvalidMessage(format!("bad SEC1 public key: {e}")))?;
+    let pk = p256::PublicKey::from_encoded_point(&encoded_point);
+    if pk.is_some().into() {
+        Ok(pk.unwrap())
+    } else {
+        Err(SessionError::InvalidMessage(
+            "invalid public key point".to_string(),
+        ))
+    }
+}
+
+/// Compute a fingerprint for a client public key (same algorithm as ServerKeypair).
+fn compute_client_fingerprint(public_key: &p256::PublicKey) -> String {
+    use p256::elliptic_curve::sec1::ToEncodedPoint;
+    use sha2::{Digest, Sha256};
+    let encoded = public_key.to_encoded_point(false);
+    let hash = Sha256::digest(encoded.as_bytes());
+    format!(
+        "{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}",
+        hash[0], hash[1], hash[2], hash[3], hash[4], hash[5]
+    )
+}
+
+/// Result of receiving a WebSocket message, with optional decryption.
+enum RecvResult {
+    Text(String),
+    Close,
+    Skip,
+}
+
+/// Receive and optionally decrypt a WebSocket message.
+fn recv_message(
+    msg: Option<Result<Message, tokio_tungstenite::tungstenite::Error>>,
+    crypto: &mut Option<SessionCrypto>,
+) -> Result<RecvResult, SessionError> {
+    match msg {
+        Some(Ok(Message::Text(ref text))) => {
+            // Plaintext mode (dev / no pairing)
+            if crypto.is_none() {
+                Ok(RecvResult::Text(text.to_string()))
+            } else {
+                Err(SessionError::InvalidMessage(
+                    "expected binary frame in encrypted mode".to_string(),
+                ))
+            }
+        }
+        Some(Ok(Message::Binary(ref data))) => {
+            if let Some(ref mut c) = crypto {
+                let plaintext = c
+                    .decrypt_client_frame(data)
+                    .map_err(SessionError::Crypto)?;
+                let text = String::from_utf8(plaintext)
+                    .map_err(|e| SessionError::InvalidMessage(format!("invalid UTF-8: {e}")))?;
+                Ok(RecvResult::Text(text))
+            } else {
+                // In plaintext mode, binary frames are non-JSON (e.g. ping/pong)
+                Ok(RecvResult::Skip)
+            }
+        }
+        Some(Ok(Message::Close(_))) | None => Ok(RecvResult::Close),
+        Some(Err(e)) => {
+            log::warn!("WebSocket read error: {}", e);
+            Ok(RecvResult::Close)
+        }
+        _ => Ok(RecvResult::Skip), // Ping/Pong frames handled by tungstenite
+    }
+}
+
+/// Send a JSON message, encrypting it if a SessionCrypto is active.
+async fn send_message<S>(
+    write: &mut S,
+    crypto: &mut Option<SessionCrypto>,
+    json: &str,
+) -> Result<(), SessionError>
+where
+    S: SinkExt<Message, Error = tokio_tungstenite::tungstenite::Error> + Unpin,
+{
+    let msg = if let Some(ref mut c) = crypto {
+        let encrypted = c
+            .encrypt_server_frame(json.as_bytes())
+            .map_err(SessionError::Crypto)?;
+        Message::Binary(encrypted.into())
+    } else {
+        Message::Text(json.into())
+    };
+    write
+        .send(msg)
+        .await
+        .map_err(|e| SessionError::WebSocket(e.to_string()))?;
     Ok(())
 }
 
@@ -242,7 +377,7 @@ mod tests {
         tokio::spawn(async move {
             let (stream, _) = listener.accept().await.unwrap();
             let ws = tokio_tungstenite::accept_async(stream).await.unwrap();
-            run(ws, kp, ps, st, bc, ctx).await;
+            run(ws, kp, ps, st, bc, ctx, false).await;
         });
 
         // 4. Connect as client
@@ -303,7 +438,7 @@ mod tests {
         tokio::spawn(async move {
             let (stream, _) = listener.accept().await.unwrap();
             let ws = tokio_tungstenite::accept_async(stream).await.unwrap();
-            run(ws, kp, ps, st, bc, ctx).await;
+            run(ws, kp, ps, st, bc, ctx, false).await;
         });
 
         let url = format!("ws://{}", addr);
@@ -361,7 +496,7 @@ mod tests {
         tokio::spawn(async move {
             let (stream, _) = listener.accept().await.unwrap();
             let ws = tokio_tungstenite::accept_async(stream).await.unwrap();
-            run(ws, kp, ps, st, bc, ctx).await;
+            run(ws, kp, ps, st, bc, ctx, false).await;
         });
 
         let url = format!("ws://{}", addr);
@@ -426,7 +561,7 @@ mod tests {
         tokio::spawn(async move {
             let (stream, _) = listener.accept().await.unwrap();
             let ws = tokio_tungstenite::accept_async(stream).await.unwrap();
-            run(ws, kp, ps, st, bc, ctx).await;
+            run(ws, kp, ps, st, bc, ctx, false).await;
         });
 
         let url = format!("ws://{}", addr);

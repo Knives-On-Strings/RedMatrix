@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useDevice } from "../../hooks/useDevice";
 import { THEMES, applyTheme, type Theme } from "../../themes";
+import type { ClockSource } from "../../types";
 
 function SettingRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -54,7 +55,7 @@ function ThemeCard({ theme, isActive, onSelect }: { theme: Theme; isActive: bool
 }
 
 export default function Settings() {
-  const { state, loading } = useDevice();
+  const { state, loading, sendCommand } = useDevice();
   const [activeTheme, setActiveTheme] = useState("dark");
 
   if (loading || !state) {
@@ -80,7 +81,11 @@ export default function Settings() {
         <div>
           <SettingGroup title="Audio">
             <SettingRow label="Sample Rate">
-              <select className="bg-neutral-700 text-sm text-neutral-300 border border-neutral-600 rounded px-2 py-1">
+              <select
+                value={state.sample_rate}
+                onChange={(e) => sendCommand({ type: "set_sample_rate", payload: { rate: Number(e.target.value) } })}
+                className="bg-neutral-700 text-sm text-neutral-300 border border-neutral-600 rounded px-2 py-1"
+              >
                 <option value="44100">44.1 kHz</option>
                 <option value="48000">48 kHz</option>
                 <option value="88200">88.2 kHz</option>
@@ -91,7 +96,11 @@ export default function Settings() {
             </SettingRow>
 
             <SettingRow label="Clock Source">
-              <select className="bg-neutral-700 text-sm text-neutral-300 border border-neutral-600 rounded px-2 py-1">
+              <select
+                value={state.clock_source}
+                onChange={(e) => sendCommand({ type: "set_clock_source", payload: { source: e.target.value as ClockSource } })}
+                className="bg-neutral-700 text-sm text-neutral-300 border border-neutral-600 rounded px-2 py-1"
+              >
                 <option value="internal">Internal</option>
                 <option value="spdif">S/PDIF</option>
                 <option value="adat">ADAT</option>
@@ -103,7 +112,11 @@ export default function Settings() {
             </SettingRow>
 
             <SettingRow label="Digital I/O Mode">
-              <select className="bg-neutral-700 text-sm text-neutral-300 border border-neutral-600 rounded px-2 py-1">
+              <select
+                value={state.spdif_mode}
+                onChange={(e) => sendCommand({ type: "set_spdif_mode", payload: { mode: e.target.value } })}
+                className="bg-neutral-700 text-sm text-neutral-300 border border-neutral-600 rounded px-2 py-1"
+              >
                 <option value="spdif_rca">S/PDIF RCA</option>
                 <option value="spdif_optical">S/PDIF Optical</option>
                 <option value="dual_adat">Dual ADAT</option>
@@ -132,7 +145,10 @@ export default function Settings() {
                 <span className="text-[10px] text-neutral-500">
                   {state.save_config_remaining}/12 remaining
                 </span>
-                <button className="text-xs px-3 py-1 bg-amber-700 text-amber-100 rounded hover:bg-amber-600">
+                <button
+                  onClick={() => sendCommand({ type: "save_config", payload: {} })}
+                  className="text-xs px-3 py-1 bg-amber-700 text-amber-100 rounded hover:bg-amber-600"
+                >
                   Save
                 </button>
               </div>

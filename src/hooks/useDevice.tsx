@@ -9,8 +9,9 @@
  * - error: error message if connection failed
  */
 
-import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useCallback, useRef, type ReactNode } from "react";
 import type { DeviceState, ClientMessage, ChannelLabels } from "../types";
+import type { Transport } from "../transport";
 import { TauriTransport } from "../transport";
 
 interface DeviceContextValue {
@@ -23,11 +24,16 @@ interface DeviceContextValue {
   getLabel: (category: keyof ChannelLabels, key: string, defaultName: string) => string;
 }
 
+interface DeviceProviderProps {
+  transport?: Transport;
+  children: ReactNode;
+}
+
 const DeviceContext = createContext<DeviceContextValue | null>(null);
 
-const transport = new TauriTransport();
-
-export function DeviceProvider({ children }: { children: ReactNode }) {
+export function DeviceProvider(props: DeviceProviderProps) {
+  const transportRef = useRef<Transport>(props.transport ?? new TauriTransport());
+  const { children } = props;
   const [state, setState] = useState<DeviceState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -41,6 +47,7 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
 
+    const transport = transportRef.current;
     async function init() {
       try {
         await transport.connect();
@@ -72,7 +79,7 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
 
   const sendCommand = useCallback(async (msg: ClientMessage) => {
     try {
-      await transport.sendCommand(msg);
+      await transportRef.current.sendCommand(msg);
     } catch (e) {
       console.error("Command failed:", e);
     }
