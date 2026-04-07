@@ -4,6 +4,9 @@
 //! Local connections (Tauri webview) bypass encryption.
 //! Remote connections use ECDH + AES-256-GCM.
 
+pub mod messages;
+pub mod state;
+
 pub const DEFAULT_PORT: u16 = 18120;
 
 #[cfg(test)]
