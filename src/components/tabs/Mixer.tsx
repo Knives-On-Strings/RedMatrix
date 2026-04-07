@@ -1,8 +1,243 @@
-export default function Mixer() {
+import { useEffect, useState } from "react";
+import type { DeviceState, InputState } from "../../types";
+import { mockDeviceState } from "./overview/mockState";
+
+function MeterBar({ level }: { level: number }) {
+  const height = Math.max(0, Math.min(100, level * 100));
+  const color = level > 0.9 ? "bg-red-500" : level > 0.7 ? "bg-amber-400" : "bg-green-500";
   return (
-    <div className="flex flex-col items-center justify-center h-full text-neutral-500">
-      <h2 className="text-lg font-semibold text-neutral-300 mb-2">Mixer</h2>
-      <p className="text-sm">Channel strips with faders, VU meters, mute/solo, pan</p>
+    <div className="w-2 h-32 bg-neutral-800 rounded-sm overflow-hidden flex flex-col-reverse">
+      <div className={`${color} rounded-sm`} style={{ height: `${height}%` }} />
+    </div>
+  );
+}
+
+function Fader({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  // value in dB, range -80 to +6
+  const normalized = (value + 80) / 86; // 0..1
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <input
+        type="range"
+        min={0}
+        max={100}
+        value={normalized * 100}
+        onChange={(e) => {
+          const norm = Number(e.target.value) / 100;
+          onChange(norm * 86 - 80);
+        }}
+        className="h-32 appearance-none cursor-pointer accent-neutral-400"
+        style={{ writingMode: "vertical-lr" as React.CSSProperties["writingMode"], direction: "rtl" }}
+      />
+      <span className="text-[9px] text-neutral-500 font-mono w-10 text-center">
+        {value <= -80 ? "-∞" : `${value.toFixed(0)}`}
+      </span>
+    </div>
+  );
+}
+
+function ChannelStrip({ input, gainDb, soloed, muted, onGainChange, onSoloToggle, onMuteToggle }: {
+  input: InputState;
+  gainDb: number;
+  soloed: boolean;
+  muted: boolean;
+  onGainChange: (db: number) => void;
+  onSoloToggle: () => void;
+  onMuteToggle: () => void;
+}) {
+  const level = 0.2 + Math.random() * 0.3; // Mock meter
+  const label = input.type === "spdif"
+    ? `S/${input.index === 0 ? "L" : "R"}`
+    : input.type === "adat"
+    ? `AD${input.index + 1}`
+    : `${input.index + 1}`;
+
+  return (
+    <div className={`flex flex-col items-center gap-1.5 px-1 py-2 rounded ${soloed ? "bg-amber-900/20" : ""}`}>
+      <span className="text-[10px] text-neutral-400 font-mono">{label}</span>
+
+      {/* Input feature badges */}
+      <div className="flex gap-0.5 h-3">
+        {input.type === "analogue" && input.index < 2 && (
+          <span className={`text-[7px] px-0.5 rounded ${input.inst ? "bg-amber-600 text-white" : "text-neutral-600"}`}>
+            INST
+          </span>
+        )}
+        {input.type === "analogue" && (
+          <>
+            {input.pad && <span className="text-[7px] px-0.5 rounded bg-blue-600 text-white">PAD</span>}
+            {input.air && <span className="text-[7px] px-0.5 rounded bg-sky-500 text-white">AIR</span>}
+          </>
+        )}
+      </div>
+
+      <div className="flex gap-1 items-end">
+        <MeterBar level={muted ? 0 : level} />
+        <Fader value={gainDb} onChange={onGainChange} />
+      </div>
+
+      <div className="flex gap-1">
+        <button
+          onClick={onSoloToggle}
+          className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+            soloed ? "bg-amber-500 text-black" : "bg-neutral-700 text-neutral-500 hover:bg-neutral-600"
+          }`}
+        >
+          S
+        </button>
+        <button
+          onClick={onMuteToggle}
+          className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+            muted ? "bg-red-600 text-white" : "bg-neutral-700 text-neutral-500 hover:bg-neutral-600"
+          }`}
+        >
+          M
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ChannelGroup({ label, inputs, gains, solos, mutes, busIndex, onGainChange, onSoloToggle, onMuteToggle }: {
+  label: string;
+  inputs: InputState[];
+  gains: number[];
+  solos: boolean[];
+  mutes: boolean[];
+  busIndex: number;
+  onGainChange: (bus: number, ch: number, db: number) => void;
+  onSoloToggle: (bus: number, ch: number) => void;
+  onMuteToggle: (bus: number, ch: number) => void;
+}) {
+  if (inputs.length === 0) return null;
+
+  return (
+    <div>
+      <div className="flex gap-0.5">
+        {inputs.map((input, i) => (
+          <ChannelStrip
+            key={`${input.type}-${input.index}`}
+            input={input}
+            gainDb={gains[i] ?? -80}
+            soloed={solos[i] ?? false}
+            muted={mutes[i] ?? false}
+            onGainChange={(db) => onGainChange(busIndex, i, db)}
+            onSoloToggle={() => onSoloToggle(busIndex, i)}
+            onMuteToggle={() => onMuteToggle(busIndex, i)}
+          />
+        ))}
+      </div>
+      <div className="text-[10px] text-neutral-500 uppercase tracking-wider text-center mt-1">{label}</div>
+    </div>
+  );
+}
+
+export default function Mixer() {
+  const [state, setState] = useState<DeviceState | null>(null);
+  const [activeBus, setActiveBus] = useState(0);
+
+  useEffect(() => {
+    setState(mockDeviceState());
+  }, []);
+
+  if (!state || !state.features.has_mixer) {
+    return (
+      <div className="flex items-center justify-center h-full text-neutral-500">
+        <span>{state ? "This device has no mixer" : "Connecting..."}</span>
+      </div>
+    );
+  }
+
+  const busCount = state.port_counts.mix.outputs;
+  const busLabel = (i: number) => String.fromCharCode(65 + i); // A, B, C...
+
+  const busGains = state.mixer.gains[activeBus] ?? [];
+  const busSolos = state.mixer.soloed[activeBus] ?? [];
+  // Mutes derived from gains (channel is "muted" if gain is -80)
+  const busMutes = busGains.map((g) => g <= -80);
+
+  const analogue = state.inputs.filter((i) => i.type === "analogue");
+  const spdif = state.inputs.filter((i) => i.type === "spdif");
+  const adat = state.inputs.filter((i) => i.type === "adat");
+
+  const handleGainChange = (_bus: number, _ch: number, _db: number) => {
+    // TODO: send via transport
+  };
+  const handleSoloToggle = (_bus: number, _ch: number) => {
+    // TODO: send via transport
+  };
+  const handleMuteToggle = (_bus: number, _ch: number) => {
+    // TODO: send via transport
+  };
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Bus selector */}
+      <div className="flex items-center gap-1 px-4 py-2 border-b border-neutral-700">
+        <span className="text-xs text-neutral-500 mr-2">Mix Bus:</span>
+        {Array.from({ length: Math.min(busCount, 12) }, (_, i) => (
+          <button
+            key={i}
+            onClick={() => setActiveBus(i)}
+            className={`w-7 h-7 text-xs font-bold rounded ${
+              activeBus === i
+                ? "bg-red-500 text-white"
+                : "bg-neutral-700 text-neutral-400 hover:bg-neutral-600"
+            }`}
+          >
+            {busLabel(i)}
+          </button>
+        ))}
+      </div>
+
+      {/* Channel strips */}
+      <div className="flex-1 overflow-x-auto overflow-y-hidden">
+        <div className="flex gap-4 p-4 min-w-max">
+          <ChannelGroup
+            label="Analogue"
+            inputs={analogue}
+            gains={busGains.slice(0, analogue.length)}
+            solos={busSolos.slice(0, analogue.length)}
+            mutes={busMutes.slice(0, analogue.length)}
+            busIndex={activeBus}
+            onGainChange={handleGainChange}
+            onSoloToggle={handleSoloToggle}
+            onMuteToggle={handleMuteToggle}
+          />
+          {spdif.length > 0 && (
+            <>
+              <div className="w-px bg-neutral-700/50 self-stretch" />
+              <ChannelGroup
+                label="S/PDIF"
+                inputs={spdif}
+                gains={busGains.slice(analogue.length, analogue.length + spdif.length)}
+                solos={busSolos.slice(analogue.length, analogue.length + spdif.length)}
+                mutes={busMutes.slice(analogue.length, analogue.length + spdif.length)}
+                busIndex={activeBus}
+                onGainChange={handleGainChange}
+                onSoloToggle={handleSoloToggle}
+                onMuteToggle={handleMuteToggle}
+              />
+            </>
+          )}
+          {adat.length > 0 && (
+            <>
+              <div className="w-px bg-neutral-700/50 self-stretch" />
+              <ChannelGroup
+                label="ADAT"
+                inputs={adat}
+                gains={busGains.slice(analogue.length + spdif.length)}
+                solos={busSolos.slice(analogue.length + spdif.length)}
+                mutes={busMutes.slice(analogue.length + spdif.length)}
+                busIndex={activeBus}
+                onGainChange={handleGainChange}
+                onSoloToggle={handleSoloToggle}
+                onMuteToggle={handleMuteToggle}
+              />
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

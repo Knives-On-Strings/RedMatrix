@@ -29,7 +29,8 @@ describe("App", () => {
   it("switches tabs when clicked", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Mixer"));
-    expect(screen.getByText("Channel strips with faders, VU meters, mute/solo, pan")).toBeDefined();
+    // Mixer tab shows bus selector
+    expect(screen.getByText("Mix Bus:")).toBeDefined();
   });
 
   it("renders the footer", () => {
