@@ -201,6 +201,7 @@ export default function Mixer() {
   const [state, setState] = useState<DeviceState | null>(null);
   const [activeBus, setActiveBus] = useState(0);
   const [busNames, setBusNames] = useState<Record<number, string>>({});
+  const [busMasters, setBusMasters] = useState<Record<number, number>>({});
 
   useEffect(() => {
     setState(mockDeviceState());
@@ -221,6 +222,13 @@ export default function Mixer() {
     setBusNames((prev) => ({ ...prev, [index]: name }));
     // TODO: persist to local config file
   };
+
+  const handleBusMasterChange = (db: number) => {
+    setBusMasters((prev) => ({ ...prev, [activeBus]: db }));
+    // TODO: apply as offset to all crosspoint gains for this bus via transport
+  };
+
+  const busMasterDb = busMasters[activeBus] ?? 0;
 
   const busGains = state.mixer.gains[activeBus] ?? [];
   const busSolos = state.mixer.soloed[activeBus] ?? [];
@@ -259,7 +267,7 @@ export default function Mixer() {
         <span className="text-[9px] text-neutral-600 ml-2 flex-shrink-0">double-click to name</span>
       </div>
 
-      {/* Channel strips */}
+      {/* Channel strips + bus master */}
       <div className="flex-1 overflow-x-auto overflow-y-hidden">
         <div className="flex gap-4 p-4 min-w-max">
           <ChannelGroup
@@ -305,6 +313,52 @@ export default function Mixer() {
               />
             </>
           )}
+
+          {/* Bus master fader */}
+          <div className="w-px bg-neutral-600 self-stretch" />
+          <div className="flex flex-col items-center gap-1.5 px-3 py-2 bg-neutral-800/50 rounded-lg min-w-[60px]">
+            <span className="text-[10px] text-neutral-300 font-bold">
+              {busLabel(activeBus)}
+            </span>
+            {busNames[activeBus] && (
+              <span className="text-[8px] text-neutral-500 truncate max-w-[56px]">
+                {busNames[activeBus]}
+              </span>
+            )}
+
+            <div className="flex gap-1 items-end">
+              {/* Bus master meter (average of all active channels) */}
+              <div className="w-3 h-32 bg-neutral-800 rounded-sm overflow-hidden flex flex-col-reverse">
+                <div
+                  className="bg-amber-500 rounded-sm"
+                  style={{
+                    height: `${Math.max(0, Math.min(100, ((busMasterDb + 80) / 86) * 100))}%`,
+                  }}
+                />
+              </div>
+
+              {/* Bus master fader */}
+              <div className="flex flex-col items-center gap-1">
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={((busMasterDb + 80) / 86) * 100}
+                  onChange={(e) => {
+                    const norm = Number(e.target.value) / 100;
+                    handleBusMasterChange(norm * 86 - 80);
+                  }}
+                  className="h-32 appearance-none cursor-pointer accent-amber-500"
+                  style={{ writingMode: "vertical-lr" as React.CSSProperties["writingMode"], direction: "rtl" }}
+                />
+                <span className="text-[9px] text-neutral-400 font-mono w-10 text-center">
+                  {busMasterDb <= -80 ? "-∞" : `${busMasterDb >= 0 ? "+" : ""}${busMasterDb.toFixed(0)}`}
+                </span>
+              </div>
+            </div>
+
+            <span className="text-[9px] text-amber-500 font-bold uppercase">Master</span>
+          </div>
         </div>
       </div>
     </div>
