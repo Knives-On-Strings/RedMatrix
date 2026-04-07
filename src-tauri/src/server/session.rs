@@ -25,6 +25,8 @@ use super::messages::{ClientMessage, ServerMessage};
 use super::state::DeviceState;
 
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(30);
+const PAIRING_TIMEOUT: Duration = Duration::from_secs(60);
+const IDLE_TIMEOUT: Duration = Duration::from_secs(30);
 
 // ── Error type ──────────────────────────────────────────────────────
 
@@ -32,6 +34,10 @@ const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(30);
 pub enum SessionError {
     #[error("handshake timed out")]
     HandshakeTimeout,
+    #[error("pairing approval timed out")]
+    PairingTimeout,
+    #[error("client idle timeout (no messages for 30s)")]
+    IdleTimeout,
     #[error("connection closed")]
     ConnectionClosed,
     #[error("WebSocket error: {0}")]
@@ -54,6 +60,17 @@ pub struct ClientCommand {
 
 // ── Public entry point ──────────────────────────────────────────────
 
+/// Channel for requesting pairing approval from the desktop UI.
+/// The session sends a request (client name + fingerprint), the UI sends back true/false.
+pub type PairingApprovalTx = mpsc::Sender<PairingRequest>;
+
+#[derive(Debug)]
+pub struct PairingRequest {
+    pub client_name: String,
+    pub client_fingerprint: String,
+    pub response_tx: tokio::sync::oneshot::Sender<bool>,
+}
+
 /// Run a WebSocket session for one client. Returns when the connection closes.
 pub async fn run(
     ws_stream: WebSocketStream<TcpStream>,
@@ -63,8 +80,9 @@ pub async fn run(
     broadcast: BroadcastHandle,
     command_tx: mpsc::Sender<ClientCommand>,
     require_pairing: bool,
+    pairing_tx: Option<PairingApprovalTx>,
 ) {
-    if let Err(e) = run_inner(ws_stream, keypair, paired_store, state, broadcast, command_tx, require_pairing).await
+    if let Err(e) = run_inner(ws_stream, keypair, paired_store, state, broadcast, command_tx, require_pairing, pairing_tx).await
     {
         log::warn!("Session ended: {}", e);
     }
@@ -80,6 +98,7 @@ async fn run_inner(
     broadcast: BroadcastHandle,
     command_tx: mpsc::Sender<ClientCommand>,
     require_pairing: bool,
+    pairing_tx: Option<PairingApprovalTx>,
 ) -> Result<(), SessionError> {
     let (mut write, mut read) = ws_stream.split();
 
@@ -130,20 +149,73 @@ async fn run_inner(
 
     // 3. Auth check
     if require_pairing {
-        // Parse client public key and check against paired store
         let client_pk = parse_client_public_key(&client_pubkey_b64)?;
         let client_fingerprint = compute_client_fingerprint(&client_pk);
-        let store = paired_store.read().await;
-        if !store.is_paired(&client_fingerprint) {
-            let reject = ServerMessage::AuthResult {
-                status: "rejected".to_string(),
-                reason: Some("unknown device — pair first".to_string()),
-            };
-            let reject_json = serde_json::to_string(&reject)?;
-            let _ = write.send(Message::Text(reject_json.into())).await;
-            return Err(SessionError::InvalidMessage(
-                "client not paired".to_string(),
-            ));
+        let is_paired = paired_store.read().await.is_paired(&client_fingerprint);
+
+        if !is_paired {
+            // Unknown client — attempt interactive pairing
+            if let Some(ref pairing_tx) = pairing_tx {
+                // Send pairing_requested to client
+                let pairing_msg = ServerMessage::AuthResult {
+                    status: "pairing_requested".to_string(),
+                    reason: Some("waiting for desktop approval".to_string()),
+                };
+                let pairing_json = serde_json::to_string(&pairing_msg)?;
+                write.send(Message::Text(pairing_json.into()))
+                    .await
+                    .map_err(|e| SessionError::WebSocket(e.to_string()))?;
+
+                // Request approval from the desktop UI with timeout
+                let (response_tx, response_rx) = tokio::sync::oneshot::channel();
+                let request = PairingRequest {
+                    client_name: _client_name.clone(),
+                    client_fingerprint: client_fingerprint.clone(),
+                    response_tx,
+                };
+
+                if pairing_tx.send(request).await.is_err() {
+                    return Err(SessionError::InvalidMessage("pairing channel closed".to_string()));
+                }
+
+                let approved = timeout(PAIRING_TIMEOUT, response_rx)
+                    .await
+                    .map_err(|_| SessionError::PairingTimeout)?
+                    .unwrap_or(false);
+
+                if approved {
+                    // Add to paired store
+                    let mut store = paired_store.write().await;
+                    store.add(super::crypto::PairedDevice {
+                        fingerprint: client_fingerprint,
+                        public_key_base64: client_pubkey_b64.clone(),
+                        name: _client_name.clone(),
+                        paired_at: SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs(),
+                    });
+                    let _ = store.save();
+                    log::info!("Paired new device: {}", _client_name);
+                } else {
+                    let reject = ServerMessage::AuthResult {
+                        status: "rejected".to_string(),
+                        reason: Some("pairing denied by user".to_string()),
+                    };
+                    let reject_json = serde_json::to_string(&reject)?;
+                    let _ = write.send(Message::Text(reject_json.into())).await;
+                    return Err(SessionError::InvalidMessage("pairing denied".to_string()));
+                }
+            } else {
+                // No pairing channel available — reject outright
+                let reject = ServerMessage::AuthResult {
+                    status: "rejected".to_string(),
+                    reason: Some("unknown device — pair first".to_string()),
+                };
+                let reject_json = serde_json::to_string(&reject)?;
+                let _ = write.send(Message::Text(reject_json.into())).await;
+                return Err(SessionError::InvalidMessage("client not paired".to_string()));
+            }
         }
     }
     // Dev mode (require_pairing == false): auto-accept all clients
@@ -186,8 +258,12 @@ async fn run_inner(
 
     loop {
         tokio::select! {
-            // Client message
-            msg = read.next() => {
+            // Client message (with idle timeout)
+            msg = timeout(IDLE_TIMEOUT, read.next()) => {
+                let msg = match msg {
+                    Ok(inner) => inner,
+                    Err(_) => return Err(SessionError::IdleTimeout),
+                };
                 let parsed = recv_message(msg, &mut session_crypto)?;
                 match parsed {
                     RecvResult::Text(text) => {
@@ -377,7 +453,7 @@ mod tests {
         tokio::spawn(async move {
             let (stream, _) = listener.accept().await.unwrap();
             let ws = tokio_tungstenite::accept_async(stream).await.unwrap();
-            run(ws, kp, ps, st, bc, ctx, false).await;
+            run(ws, kp, ps, st, bc, ctx, false, None).await;
         });
 
         // 4. Connect as client
@@ -438,7 +514,7 @@ mod tests {
         tokio::spawn(async move {
             let (stream, _) = listener.accept().await.unwrap();
             let ws = tokio_tungstenite::accept_async(stream).await.unwrap();
-            run(ws, kp, ps, st, bc, ctx, false).await;
+            run(ws, kp, ps, st, bc, ctx, false, None).await;
         });
 
         let url = format!("ws://{}", addr);
@@ -496,7 +572,7 @@ mod tests {
         tokio::spawn(async move {
             let (stream, _) = listener.accept().await.unwrap();
             let ws = tokio_tungstenite::accept_async(stream).await.unwrap();
-            run(ws, kp, ps, st, bc, ctx, false).await;
+            run(ws, kp, ps, st, bc, ctx, false, None).await;
         });
 
         let url = format!("ws://{}", addr);
@@ -561,7 +637,7 @@ mod tests {
         tokio::spawn(async move {
             let (stream, _) = listener.accept().await.unwrap();
             let ws = tokio_tungstenite::accept_async(stream).await.unwrap();
-            run(ws, kp, ps, st, bc, ctx, false).await;
+            run(ws, kp, ps, st, bc, ctx, false, None).await;
         });
 
         let url = format!("ws://{}", addr);

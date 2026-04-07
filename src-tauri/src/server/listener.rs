@@ -52,7 +52,7 @@ pub async fn listen(
                             match accept_async(stream).await {
                                 Ok(ws_stream) => {
                                     log::info!("Client connected: {}", addr);
-                                    session::run(ws_stream, kp, ps, st, bc, ctx, require_pairing).await;
+                                    session::run(ws_stream, kp, ps, st, bc, ctx, require_pairing, None).await;
                                     log::info!("Client disconnected: {}", addr);
                                 }
                                 Err(e) => {
