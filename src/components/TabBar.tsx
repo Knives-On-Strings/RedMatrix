@@ -1,4 +1,4 @@
-const TABS = ["Overview", "Mixer", "Routing", "Matrix", "Settings"] as const;
+const TABS = ["Overview", "Mixer", "Patchbay", "Matrix", "Settings"] as const;
 
 export type TabName = (typeof TABS)[number];
 
