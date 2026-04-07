@@ -1,4 +1,4 @@
-import type { DeviceState } from "../../../types";
+import type { DeviceState, ChannelLabels } from "../../../types";
 
 /**
  * Generate a mock DeviceState matching the Scarlett 18i20 Gen 3 at 48kHz.
@@ -68,4 +68,29 @@ export function mockDeviceState(): DeviceState {
     },
     routing: Array.from({ length: 20 }, (_, i) => ({ type: "pcm" as const, index: i })),
   };
+}
+
+/**
+ * Default empty channel labels. Used until the user customizes them.
+ */
+export function emptyChannelLabels(): ChannelLabels {
+  return {
+    inputs: {},
+    outputs: {},
+    pcm: {},
+    buses: {},
+  };
+}
+
+/**
+ * Resolve a display label for a channel.
+ * Returns the custom label if set, otherwise the default name.
+ */
+export function resolveLabel(
+  labels: ChannelLabels,
+  category: "inputs" | "outputs" | "pcm" | "buses",
+  key: string,
+  defaultName: string,
+): string {
+  return labels[category][key] || defaultName;
 }
