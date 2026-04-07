@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
-import type { DeviceState, InputState } from "../../types";
-import { mockDeviceState } from "./overview/mockState";
+import { useState } from "react";
+import type { InputState } from "../../types";
+import { useDevice } from "../../hooks/useDevice";
 
 function MeterBar({ level }: { level: number }) {
   const height = Math.max(0, Math.min(100, level * 100));
@@ -198,21 +198,25 @@ function BusButton({ isActive, label, customName, onClick, onRename }: {
 }
 
 export default function Mixer() {
-  const [state, setState] = useState<DeviceState | null>(null);
+  const { state, loading, sendCommand } = useDevice();
   const [activeBus, setActiveBus] = useState(0);
   const [busNames, setBusNames] = useState<Record<number, string>>({});
   const [busMasters, setBusMasters] = useState<Record<number, number>>({});
   const [subAssignments, setSubAssignments] = useState<[number, number, number, number]>([0, 1, 2, 3]);
   const [masterDb, setMasterDb] = useState(0);
 
-  useEffect(() => {
-    setState(mockDeviceState());
-  }, []);
-
-  if (!state || !state.features.has_mixer) {
+  if (loading || !state) {
     return (
       <div className="flex items-center justify-center h-full text-neutral-500">
-        <span>{state ? "This device has no mixer" : "Connecting..."}</span>
+        <span>Connecting...</span>
+      </div>
+    );
+  }
+
+  if (!state.features.has_mixer) {
+    return (
+      <div className="flex items-center justify-center h-full text-neutral-500">
+        <span>This device has no mixer</span>
       </div>
     );
   }
@@ -252,14 +256,19 @@ export default function Mixer() {
   const spdif = state.inputs.filter((i) => i.type === "spdif");
   const adat = state.inputs.filter((i) => i.type === "adat");
 
-  const handleGainChange = (_bus: number, _ch: number, _db: number) => {
-    // TODO: send via transport
+  const handleGainChange = (bus: number, ch: number, db: number) => {
+    sendCommand({ type: "set_mix_gain", payload: { mix: bus, channel: ch, gain_db: db } });
   };
-  const handleSoloToggle = (_bus: number, _ch: number) => {
-    // TODO: send via transport
+  const handleSoloToggle = (bus: number, ch: number) => {
+    const currentSoloed = state.mixer.soloed[bus]?.[ch] ?? false;
+    sendCommand({ type: "set_mix_solo", payload: { mix: bus, channel: ch, soloed: !currentSoloed } });
   };
-  const handleMuteToggle = (_bus: number, _ch: number) => {
-    // TODO: send via transport
+  const handleMuteToggle = (bus: number, ch: number) => {
+    const currentMuted = busGains[ch] !== undefined && busGains[ch]! <= -80;
+    sendCommand({
+      type: "set_mix_gain",
+      payload: { mix: bus, channel: ch, gain_db: currentMuted ? 0 : -80 },
+    });
   };
 
   return (

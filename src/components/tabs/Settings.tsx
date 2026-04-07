@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
-import type { DeviceState } from "../../types";
-import { mockDeviceState } from "./overview/mockState";
+import { useState } from "react";
+import { useDevice } from "../../hooks/useDevice";
 import { THEMES, applyTheme, type Theme } from "../../themes";
 
 function SettingRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -55,14 +54,10 @@ function ThemeCard({ theme, isActive, onSelect }: { theme: Theme; isActive: bool
 }
 
 export default function Settings() {
-  const [state, setState] = useState<DeviceState | null>(null);
+  const { state, loading } = useDevice();
   const [activeTheme, setActiveTheme] = useState("dark");
 
-  useEffect(() => {
-    setState(mockDeviceState());
-  }, []);
-
-  if (!state) {
+  if (loading || !state) {
     return (
       <div className="flex items-center justify-center h-full text-neutral-500">
         <span>Connecting...</span>

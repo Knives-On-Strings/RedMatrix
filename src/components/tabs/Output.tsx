@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
-import type { DeviceState } from "../../types";
-import { mockDeviceState } from "./overview/mockState";
+import { useState } from "react";
+import { useDevice } from "../../hooks/useDevice";
 import SubTabBar from "../SubTabBar";
 import OutputMatrix from "./output/OutputMatrix";
 import OutputConfig from "./output/OutputConfig";
@@ -8,14 +7,10 @@ import OutputConfig from "./output/OutputConfig";
 const SUB_TABS = ["Matrix", "Config"] as const;
 
 export default function Output() {
-  const [state, setState] = useState<DeviceState | null>(null);
+  const { state, loading } = useDevice();
   const [subTab, setSubTab] = useState<string>("Matrix");
 
-  useEffect(() => {
-    setState(mockDeviceState());
-  }, []);
-
-  if (!state) {
+  if (loading || !state) {
     return (
       <div className="flex items-center justify-center h-full text-neutral-500">
         Connecting...

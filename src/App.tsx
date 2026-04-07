@@ -2,6 +2,7 @@ import { useState } from "react";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
 import TabBar, { type TabName } from "./components/TabBar";
+import { DeviceProvider } from "./hooks/useDevice";
 import Overview from "./components/tabs/Overview";
 import Mixer from "./components/tabs/Mixer";
 import Input from "./components/tabs/Input";
@@ -21,14 +22,16 @@ function App() {
   const ActiveComponent = TAB_COMPONENTS[activeTab];
 
   return (
-    <div className="min-h-screen bg-neutral-900 text-neutral-100 flex flex-col">
-      <Header />
-      <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
-      <main className="flex-1">
-        <ActiveComponent />
-      </main>
-      <Footer />
-    </div>
+    <DeviceProvider>
+      <div className="min-h-screen bg-neutral-900 text-neutral-100 flex flex-col">
+        <Header />
+        <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
+        <main className="flex-1">
+          <ActiveComponent />
+        </main>
+        <Footer />
+      </div>
+    </DeviceProvider>
   );
 }
 

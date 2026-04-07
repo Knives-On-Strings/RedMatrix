@@ -1,25 +1,24 @@
-import { useEffect, useState } from "react";
-import type { DeviceState } from "../../types";
+import { useDevice } from "../../hooks/useDevice";
 import LedStrip from "./overview/LedStrip";
 import InputMeters from "./overview/InputMeters";
 import OutputLevels from "./overview/OutputLevels";
 import StatusWidgets from "./overview/StatusWidgets";
 
-// Mock state until transport is wired up
-import { mockDeviceState } from "./overview/mockState";
-
 export default function Overview() {
-  const [state, setState] = useState<DeviceState | null>(null);
+  const { state, loading, error } = useDevice();
 
-  useEffect(() => {
-    // TODO: Replace with transport.getState() when IPC is connected
-    setState(mockDeviceState());
-  }, []);
-
-  if (!state) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center h-full text-neutral-500">
         <span>Connecting to device...</span>
+      </div>
+    );
+  }
+
+  if (error || !state) {
+    return (
+      <div className="flex items-center justify-center h-full text-neutral-500">
+        <span>{error ?? "No device connected"}</span>
       </div>
     );
   }
