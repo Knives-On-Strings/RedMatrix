@@ -202,6 +202,8 @@ export default function Mixer() {
   const [activeBus, setActiveBus] = useState(0);
   const [busNames, setBusNames] = useState<Record<number, string>>({});
   const [busMasters, setBusMasters] = useState<Record<number, number>>({});
+  const [subAssignments, setSubAssignments] = useState<[number, number, number, number]>([0, 1, 2, 3]);
+  const [masterDb, setMasterDb] = useState(0);
 
   useEffect(() => {
     setState(mockDeviceState());
@@ -223,12 +225,23 @@ export default function Mixer() {
     // TODO: persist to local config file
   };
 
-  const handleBusMasterChange = (db: number) => {
-    setBusMasters((prev) => ({ ...prev, [activeBus]: db }));
+  const handleBusMasterChange = (busIndex: number, db: number) => {
+    setBusMasters((prev) => ({ ...prev, [busIndex]: db }));
     // TODO: apply as offset to all crosspoint gains for this bus via transport
   };
 
-  const busMasterDb = busMasters[activeBus] ?? 0;
+  const handleSubAssignment = (subIndex: number, busIndex: number) => {
+    setSubAssignments((prev) => {
+      const next = [...prev] as [number, number, number, number];
+      next[subIndex] = busIndex;
+      return next;
+    });
+  };
+
+  const handleMasterChange = (db: number) => {
+    setMasterDb(db);
+    // TODO: apply as global offset to all bus masters via transport
+  };
 
   const busGains = state.mixer.gains[activeBus] ?? [];
   const busSolos = state.mixer.soloed[activeBus] ?? [];
@@ -314,50 +327,90 @@ export default function Mixer() {
             </>
           )}
 
-          {/* Bus master fader */}
+          {/* Sub faders + Master */}
           <div className="w-px bg-neutral-600 self-stretch" />
-          <div className="flex flex-col items-center gap-1.5 px-3 py-2 bg-neutral-800/50 rounded-lg min-w-[60px]">
-            <span className="text-[10px] text-neutral-300 font-bold">
-              {busLabel(activeBus)}
-            </span>
-            {busNames[activeBus] && (
-              <span className="text-[8px] text-neutral-500 truncate max-w-[56px]">
-                {busNames[activeBus]}
-              </span>
-            )}
+          <div className="flex gap-2">
+            {/* 4 assignable sub faders */}
+            {subAssignments.map((assignedBus, subIdx) => {
+              const subDb = busMasters[assignedBus] ?? 0;
+              return (
+                <div key={subIdx} className="flex flex-col items-center gap-1 px-2 py-2 bg-neutral-800/50 rounded-lg min-w-[56px]">
+                  {/* Bus assignment dropdown */}
+                  <select
+                    value={assignedBus}
+                    onChange={(e) => handleSubAssignment(subIdx, Number(e.target.value))}
+                    className="w-full text-[9px] bg-neutral-700 border border-neutral-600 rounded px-1 py-0.5 text-neutral-300"
+                  >
+                    {Array.from({ length: Math.min(busCount, 12) }, (_, i) => (
+                      <option key={i} value={i}>
+                        {busLabel(i)}{busNames[i] ? ` ${busNames[i]}` : ""}
+                      </option>
+                    ))}
+                  </select>
 
-            <div className="flex gap-1 items-end">
-              {/* Bus master meter (average of all active channels) */}
-              <div className="w-3 h-32 bg-neutral-800 rounded-sm overflow-hidden flex flex-col-reverse">
-                <div
-                  className="bg-amber-500 rounded-sm"
-                  style={{
-                    height: `${Math.max(0, Math.min(100, ((busMasterDb + 80) / 86) * 100))}%`,
-                  }}
-                />
+                  <div className="flex gap-1 items-end">
+                    <div className="w-2 h-32 bg-neutral-800 rounded-sm overflow-hidden flex flex-col-reverse">
+                      <div
+                        className="bg-amber-500 rounded-sm"
+                        style={{ height: `${Math.max(0, Math.min(100, ((subDb + 80) / 86) * 100))}%` }}
+                      />
+                    </div>
+                    <div className="flex flex-col items-center gap-1">
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        value={((subDb + 80) / 86) * 100}
+                        onChange={(e) => {
+                          const norm = Number(e.target.value) / 100;
+                          handleBusMasterChange(assignedBus, norm * 86 - 80);
+                        }}
+                        className="h-32 appearance-none cursor-pointer accent-amber-500"
+                        style={{ writingMode: "vertical-lr" as React.CSSProperties["writingMode"], direction: "rtl" }}
+                      />
+                      <span className="text-[8px] text-neutral-400 font-mono w-10 text-center">
+                        {subDb <= -80 ? "-∞" : `${subDb >= 0 ? "+" : ""}${subDb.toFixed(0)}`}
+                      </span>
+                    </div>
+                  </div>
+
+                  <span className="text-[8px] text-amber-500 font-bold">SUB {subIdx + 1}</span>
+                </div>
+              );
+            })}
+
+            {/* Master fader */}
+            <div className="flex flex-col items-center gap-1 px-2 py-2 bg-neutral-700/50 rounded-lg min-w-[56px] border border-neutral-600">
+              <span className="text-[10px] text-red-400 font-bold">MAIN</span>
+
+              <div className="flex gap-1 items-end">
+                <div className="w-2 h-32 bg-neutral-800 rounded-sm overflow-hidden flex flex-col-reverse">
+                  <div
+                    className="bg-red-500 rounded-sm"
+                    style={{ height: `${Math.max(0, Math.min(100, ((masterDb + 80) / 86) * 100))}%` }}
+                  />
+                </div>
+                <div className="flex flex-col items-center gap-1">
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={((masterDb + 80) / 86) * 100}
+                    onChange={(e) => {
+                      const norm = Number(e.target.value) / 100;
+                      handleMasterChange(norm * 86 - 80);
+                    }}
+                    className="h-32 appearance-none cursor-pointer accent-red-500"
+                    style={{ writingMode: "vertical-lr" as React.CSSProperties["writingMode"], direction: "rtl" }}
+                  />
+                  <span className="text-[8px] text-neutral-400 font-mono w-10 text-center">
+                    {masterDb <= -80 ? "-∞" : `${masterDb >= 0 ? "+" : ""}${masterDb.toFixed(0)}`}
+                  </span>
+                </div>
               </div>
 
-              {/* Bus master fader */}
-              <div className="flex flex-col items-center gap-1">
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  value={((busMasterDb + 80) / 86) * 100}
-                  onChange={(e) => {
-                    const norm = Number(e.target.value) / 100;
-                    handleBusMasterChange(norm * 86 - 80);
-                  }}
-                  className="h-32 appearance-none cursor-pointer accent-amber-500"
-                  style={{ writingMode: "vertical-lr" as React.CSSProperties["writingMode"], direction: "rtl" }}
-                />
-                <span className="text-[9px] text-neutral-400 font-mono w-10 text-center">
-                  {busMasterDb <= -80 ? "-∞" : `${busMasterDb >= 0 ? "+" : ""}${busMasterDb.toFixed(0)}`}
-                </span>
-              </div>
+              <span className="text-[8px] text-red-400 font-bold">MASTER</span>
             </div>
-
-            <span className="text-[9px] text-amber-500 font-bold uppercase">Master</span>
           </div>
         </div>
       </div>
