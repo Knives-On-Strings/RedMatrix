@@ -29,7 +29,9 @@
       "Bash(cargo check:*)",
       "Bash(gh repo:*)",
       "Bash(mkdir -p S:/Dev/audio/redmatrix/tests/fixtures/alsa-states)",
-      "Bash(gh api:*)"
+      "Bash(gh api:*)",
+      "Bash(find /s/Dev/audio/redmatrix/src/components/tabs -name \"*.tsx\" -exec wc -l {})",
+      "Bash(grep -n \"TODO\\\\|FIXME\\\\|XXX\\\\|HACK\" /s/Dev/audio/redmatrix/src/components/tabs/*.tsx)"
     ]
   }
 }

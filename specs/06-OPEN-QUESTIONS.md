@@ -108,7 +108,24 @@ Files:
 - `channel_labels_{serial}.json` — user-defined channel names per device
 - `config.json` — server settings (port, name, max_saves_per_hour, etc.)
 
-### 17. Mixer input channel count and mapping
+### 17. USB thread architecture (Critical for real hardware)
+
+The `rusb` crate uses blocking libusb I/O. If USB commands run on a tokio worker thread, they'll block the entire async runtime (freezing the WebSocket server, meter broadcasts, and mDNS).
+
+**Solution:** Dedicated `std::thread` for all USB I/O:
+- Spawns on device connect, owns the `rusb::DeviceHandle`
+- Receives command requests via `crossbeam` or `std::sync::mpsc` channel from the tokio state manager
+- Runs the blocking `transfer()` calls without affecting async tasks
+- A second loop on the same thread (or a sibling thread) does blocking `read_interrupt()` on EP 0x83 for hardware notifications
+- Sends notification events back to the tokio state manager for state re-reads
+
+The current `UsbTransport` trait needs a companion `UsbNotificationStream` trait or a dedicated interrupt listener.
+
+### 18. Meter polling rate
+
+60Hz USB control transfers is excessive — generates heavy CPU/kernel overhead. The kernel driver polls much slower. Cap at **20Hz** (50ms interval) and use **client-side CSS/JS easing** (React Spring, requestAnimationFrame decay) to smooth meter visuals to 60fps. The meters look fluid without choking the USB controller.
+
+### 19. Mixer input channel count and mapping
 The 18i20 Gen 3 DSP mixer has `port_counts.mix = { inputs: 12, outputs: 25 }`. The Mixer tab currently shows all hardware inputs (9 analogue + S/PDIF + ADAT = 19 channels) but the hardware mixer only has **12 input slots**. Which 12 inputs feed those slots is determined by the mux routing to the mixer input destinations.
 
 The Mixer tab needs to show exactly 12 channel strips, labeled by what the mux has routed to each mixer input. This requires reading the mux state to determine the current mixer input assignments. Low priority for the UI draft phase — the correct channel count matters for the real implementation.
