@@ -3,8 +3,9 @@
 //! These are invoked from the React frontend via `@tauri-apps/api`.
 //! Each command is registered in lib.rs via `tauri::generate_handler![]`.
 
+use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{oneshot, Mutex, RwLock};
 
 use tauri::{Emitter, State};
 
@@ -17,6 +18,11 @@ use crate::server::state::DeviceState;
 /// Shared application state managed by Tauri.
 pub struct AppState {
     pub device_state: Arc<RwLock<DeviceState>>,
+    /// Pending pairing approvals: fingerprint -> oneshot sender.
+    /// When a WebSocket session sends a PairingRequest, it stores the
+    /// oneshot::Sender here. When the UI calls approve_pairing, we
+    /// pop the sender and respond.
+    pub pending_pairings: Arc<Mutex<HashMap<String, oneshot::Sender<bool>>>>,
 }
 
 /// Get the current device state as JSON.
@@ -89,17 +95,28 @@ pub fn save_user_config(serial: String, config_data: config::UserConfig) -> Resu
 
 /// Approve or deny a pairing request from a remote client.
 ///
-/// Called from the frontend PairingModal when the user clicks Approve or Deny.
-/// TODO: Forward approval to the session handler via a channel.
-/// The channel wiring requires passing the pairing_tx from the server into Tauri app state.
+/// Called from the frontend PairingModal. Pops the pending oneshot sender
+/// for this fingerprint and sends the approval decision back to the
+/// waiting WebSocket session.
 #[tauri::command]
-pub fn approve_pairing(fingerprint: String, approved: bool) -> Result<(), String> {
+pub async fn approve_pairing(
+    fingerprint: String,
+    approved: bool,
+    app_state: State<'_, AppState>,
+) -> Result<(), String> {
     log::info!(
         "Pairing {} for fingerprint {}",
         if approved { "approved" } else { "denied" },
         fingerprint
     );
-    Ok(())
+
+    let mut pending = app_state.pending_pairings.lock().await;
+    if let Some(sender) = pending.remove(&fingerprint) {
+        let _ = sender.send(approved);
+        Ok(())
+    } else {
+        Err(format!("No pending pairing request for fingerprint {}", fingerprint))
+    }
 }
 
 /// Get server connection info for remote pairing (fingerprint, port, IPs).

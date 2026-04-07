@@ -4,8 +4,9 @@ pub mod server;
 pub mod state;
 pub mod tauri_commands;
 
+use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 
 use tauri::Emitter;
 use server::state::DeviceState;
@@ -19,7 +20,10 @@ pub fn run() {
     let device_state = Arc::new(RwLock::new(DeviceState::mock_18i20_gen3()));
 
     tauri::Builder::default()
-        .manage(AppState { device_state })
+        .manage(AppState {
+            device_state,
+            pending_pairings: Arc::new(Mutex::new(HashMap::new())),
+        })
         .setup(|app| {
             // Spawn mock meter emitter — sends meter_data Tauri events at 20Hz
             let handle = app.handle().clone();
