@@ -24,6 +24,10 @@ pub struct BroadcastHandle {
     meter_tx: broadcast::Sender<Vec<u8>>,
 }
 
+impl Default for UpdateBroadcast {
+    fn default() -> Self { Self::new() }
+}
+
 impl UpdateBroadcast {
     pub fn new() -> Self {
         let (sender, _) = broadcast::channel(64);
@@ -35,6 +39,10 @@ impl UpdateBroadcast {
     }
 }
 
+impl Default for MeterBroadcast {
+    fn default() -> Self { Self::new() }
+}
+
 impl MeterBroadcast {
     pub fn new() -> Self {
         let (sender, _) = broadcast::channel(4); // Small buffer, drop old frames
@@ -44,6 +52,10 @@ impl MeterBroadcast {
     pub fn sender(&self) -> &broadcast::Sender<Vec<u8>> {
         &self.sender
     }
+}
+
+impl Default for BroadcastHandle {
+    fn default() -> Self { Self::new() }
 }
 
 impl BroadcastHandle {
