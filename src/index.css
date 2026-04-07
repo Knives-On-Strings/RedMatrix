@@ -1,1 +1,54 @@
 @import "tailwindcss";
+
+/*
+ * Theme CSS custom properties.
+ *
+ * These are set dynamically by applyTheme() in themes/index.ts.
+ * Default values here match the "dark" theme so the app looks right
+ * before JS loads.
+ *
+ * Components should reference these via var(--property) instead of
+ * hardcoding Tailwind color classes. Migration from hardcoded colors
+ * to theme variables is ongoing — new components should use theme vars.
+ */
+:root {
+  --bg-app: #171717;
+  --bg-surface: #262626;
+  --bg-surface-raised: #2d2d2d;
+  --bg-control: #404040;
+  --bg-control-hover: #525252;
+  --bg-control-active: #737373;
+
+  --text-primary: #f5f5f5;
+  --text-secondary: #a3a3a3;
+  --text-muted: #737373;
+  --text-disabled: #525252;
+
+  --border-default: #404040;
+  --border-subtle: #333333;
+
+  --accent: #f87171;
+  --accent-text: #f87171;
+
+  --meter-green: #22c55e;
+  --meter-amber: #fbbf24;
+  --meter-red: #ef4444;
+  --led-green: #22c55e;
+  --led-red: #ef4444;
+  --led-amber: #fbbf24;
+  --led-off: #404040;
+
+  --btn-solo-active: #f59e0b;
+  --btn-solo-text: #000000;
+  --btn-mute-active: #dc2626;
+  --btn-mute-text: #ffffff;
+  --btn-linked: #14532d;
+  --btn-linked-text: #86efac;
+
+  --port-analogue: #2563eb;
+  --port-spdif: #9333ea;
+  --port-adat: #0d9488;
+  --port-mix: #d97706;
+  --port-pcm: #16a34a;
+  --port-off: #262626;
+}
