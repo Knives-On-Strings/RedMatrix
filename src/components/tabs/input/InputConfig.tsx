@@ -51,10 +51,40 @@ function InputRow({ input }: { input: InputState }) {
   );
 }
 
+function DawChannelRow({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-3 py-2 border-b border-neutral-800">
+      <span className="text-xs text-neutral-300 w-28">{label}</span>
+      <span className="text-[9px] text-neutral-500 w-16">PCM</span>
+      <div className="flex-1" />
+      <input
+        type="text"
+        placeholder="Custom label..."
+        className="text-xs bg-neutral-800 border border-neutral-700 rounded px-2 py-1 w-32 text-neutral-300 placeholder-neutral-600"
+      />
+    </div>
+  );
+}
+
+function DawStereoPairRow({ left, right, name }: { left: number; right: number; name: string }) {
+  return (
+    <div className="flex items-center justify-between py-2 border-b border-neutral-800">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-neutral-300">{name}</span>
+        <span className="text-[10px] text-neutral-500 font-mono">DAW Out {left + 1}/{right + 1}</span>
+      </div>
+      <button className="text-[9px] px-1.5 py-0.5 rounded bg-green-900 text-green-300 hover:bg-green-800">
+        Linked
+      </button>
+    </div>
+  );
+}
+
 export default function InputConfig({ state }: InputConfigProps) {
   const analogue = state.inputs.filter((i) => i.type === "analogue");
   const spdif = state.inputs.filter((i) => i.type === "spdif");
   const adat = state.inputs.filter((i) => i.type === "adat");
+  const dawOutCount = state.port_counts.pcm.outputs;
 
   return (
     <div className="p-4 max-w-2xl">
@@ -62,7 +92,7 @@ export default function InputConfig({ state }: InputConfigProps) {
 
       {analogue.length > 0 && (
         <div className="mb-4">
-          <h4 className="text-[10px] text-neutral-500 uppercase tracking-wider mb-1">Analogue</h4>
+          <h4 className="text-[10px] text-neutral-500 uppercase tracking-wider mb-1">Analogue Inputs</h4>
           {analogue.map((input) => (
             <InputRow key={`${input.type}-${input.index}`} input={input} />
           ))}
@@ -71,7 +101,7 @@ export default function InputConfig({ state }: InputConfigProps) {
 
       {spdif.length > 0 && (
         <div className="mb-4">
-          <h4 className="text-[10px] text-neutral-500 uppercase tracking-wider mb-1">S/PDIF</h4>
+          <h4 className="text-[10px] text-neutral-500 uppercase tracking-wider mb-1">S/PDIF Inputs</h4>
           {spdif.map((input) => (
             <InputRow key={`${input.type}-${input.index}`} input={input} />
           ))}
@@ -80,9 +110,36 @@ export default function InputConfig({ state }: InputConfigProps) {
 
       {adat.length > 0 && (
         <div className="mb-4">
-          <h4 className="text-[10px] text-neutral-500 uppercase tracking-wider mb-1">ADAT</h4>
+          <h4 className="text-[10px] text-neutral-500 uppercase tracking-wider mb-1">ADAT Inputs</h4>
           {adat.map((input) => (
             <InputRow key={`${input.type}-${input.index}`} input={input} />
+          ))}
+        </div>
+      )}
+
+      {dawOutCount > 0 && (
+        <div className="mb-4">
+          <h4 className="text-[10px] text-neutral-500 uppercase tracking-wider mb-1">DAW from Computer</h4>
+          <p className="text-[9px] text-neutral-600 mb-2">
+            PCM channels from your DAW. These are sources you can route to the mixer or directly to outputs.
+          </p>
+
+          {/* DAW stereo pairs */}
+          <div className="mb-3 bg-neutral-800/30 rounded-lg px-3 py-1">
+            <h5 className="text-[9px] text-neutral-500 uppercase tracking-wider my-1.5">Stereo Pairs</h5>
+            {Array.from({ length: Math.floor(dawOutCount / 2) }, (_, i) => (
+              <DawStereoPairRow
+                key={i}
+                left={i * 2}
+                right={i * 2 + 1}
+                name={`DAW Out ${i * 2 + 1}/${i * 2 + 2}`}
+              />
+            ))}
+          </div>
+
+          {/* Individual DAW channels */}
+          {Array.from({ length: dawOutCount }, (_, i) => (
+            <DawChannelRow key={i} label={`DAW Out ${i + 1}`} />
           ))}
         </div>
       )}

@@ -79,12 +79,44 @@ export default function OutputConfig({ state }: OutputConfigProps) {
       </div>
 
       {/* Individual outputs */}
-      <div>
-        <h4 className="text-[10px] text-neutral-500 uppercase tracking-wider mb-2">All Outputs</h4>
+      <div className="mb-6">
+        <h4 className="text-[10px] text-neutral-500 uppercase tracking-wider mb-2">Physical Outputs</h4>
         {state.outputs.map((output) => (
           <OutputRow key={output.index} output={output} />
         ))}
       </div>
+
+      {/* DAW capture channels */}
+      {state.port_counts.pcm.inputs > 0 && (
+        <div>
+          <h4 className="text-[10px] text-neutral-500 uppercase tracking-wider mb-2">DAW to Computer</h4>
+          <p className="text-[9px] text-neutral-600 mb-2">
+            PCM capture channels sent to your DAW for recording. Route sources to these in the Output Matrix.
+          </p>
+
+          {/* DAW capture stereo pairs */}
+          <div className="mb-3 bg-neutral-800/30 rounded-lg px-3 py-1">
+            <h5 className="text-[9px] text-neutral-500 uppercase tracking-wider my-1.5">Stereo Pairs</h5>
+            {Array.from({ length: Math.floor(state.port_counts.pcm.inputs / 2) }, (_, i) => (
+              <div key={i} className="flex items-center justify-between py-2 border-b border-neutral-800">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-neutral-300">DAW In {i * 2 + 1}/{i * 2 + 2}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    placeholder="Custom label..."
+                    className="text-xs bg-neutral-800 border border-neutral-700 rounded px-2 py-1 w-32 text-neutral-300 placeholder-neutral-600"
+                  />
+                  <button className="text-[9px] px-1.5 py-0.5 rounded bg-green-900 text-green-300 hover:bg-green-800">
+                    Linked
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
