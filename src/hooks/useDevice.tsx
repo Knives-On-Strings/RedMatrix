@@ -162,9 +162,11 @@ export function DeviceProvider(props: DeviceProviderProps) {
   const sendCommand = useCallback(async (msg: ClientMessage) => {
     try {
       await transportRef.current.sendCommand(msg);
+      // Re-fetch state after command to reflect the mock handler's mutations
+      const newState = await transportRef.current.getState();
+      setState(newState);
     } catch (e) {
       console.error("Command failed:", e);
-      const { showToast } = await import("../components/Toast");
       showToast(`Command failed: ${e instanceof Error ? e.message : "unknown error"}`, "error");
     }
   }, []);
