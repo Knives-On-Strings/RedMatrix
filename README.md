@@ -33,16 +33,18 @@ Devices not yet validated will start in **read-only mode** (metering and status 
 
 Scarlett 4th Gen large models (16i16, 18i16, 18i20) use a different protocol and are not currently supported.
 
-## Features (Planned)
+## Features
 
-- **Overview** — status dashboard with input meters, routing destinations, and front panel LED mirror
-- **Mixer** — channel strip faders with VU meters, solo/mute, PAD/AIR/INST/48V controls
-- **Routing** — full patchbay grid across all port types (analogue, S/PDIF, ADAT, mixer, DAW)
-- **Matrix** — DSP mixer gain crosspoint grid (25×12)
-- **Settings** — sample rate, clock source, digital I/O mode, device configuration
-- **Remote control** — encrypted WebSocket server for iPad companion app
-- **Stereo pairing** — headphone and monitor outputs grouped as stereo pairs
-- **Multi-device** — auto-detects your interface model, adapts UI to its capabilities
+- **Overview** — status dashboard with input meters, output levels, front panel LED mirror, status widgets
+- **Mixer** — channel strip faders with VU meters, solo/mute, 4 assignable sub faders + master, renamable bus labels
+- **Input** — DSP mixer gain matrix (input→bus) + per-input config (PAD/AIR/INST/48V, custom labels)
+- **Output** — patchbay routing matrix (source→destination) + per-output config (stereo pairing, custom labels)
+- **Settings** — sample rate, clock source, digital I/O mode, theme selector, device info, remote status
+- **Remote control** — encrypted WebSocket server (ECDH + AES-256-GCM) for iPad companion app
+- **Stereo pairing** — configurable linked output pairs with shared faders
+- **Multi-device** — 15 device configs ported, auto-adapts UI to device capabilities
+- **Themes** — dark (default), light, high visibility, extensible via CSS custom properties
+- **MIDI mapping** — planned: map MIDI CC from any controller to mixer faders (MIDI Learn mode)
 
 ## Architecture
 
@@ -76,8 +78,8 @@ See [`specs/01-ARCHITECTURE.md`](specs/01-ARCHITECTURE.md) for full details.
 | Phase | Description | Status |
 |-------|-------------|--------|
 | 0 | USB access validation | **Complete** ✅ — protocol confirmed against real 18i20 hardware |
-| 1 | Protocol library in Rust (TDD) | **In progress** — command serialization, mixer encoding, and all 15 device configs done (95 tests passing) |
-| 2 | Desktop MVP (all 5 tabs working) | Not started |
+| 1 | Protocol library in Rust (TDD) | **Complete** ✅ — command serialization, mixer encoding, all 15 device configs (139 Rust tests) |
+| 2 | Desktop MVP | **In progress** — WebSocket server, frontend UI (Overview/Mixer/Input/Output), Tauri IPC wired |
 | 3 | Multi-device support + polish | Not started |
 | 4 | iPad remote app | Not started |
 
@@ -96,6 +98,7 @@ The `specs/` folder contains the complete project specification:
 | [04-UX](specs/04-UX.md) | UI specification — tabs, components, behaviour |
 | [05-BACKLOG](specs/05-BACKLOG.md) | Phased project plan |
 | [06-OPEN-QUESTIONS](specs/06-OPEN-QUESTIONS.md) | Unresolved decisions and blockers |
+| [07-WEBSOCKET-API](specs/07-WEBSOCKET-API.md) | WebSocket API reference for remote control |
 
 ## Development
 
@@ -115,10 +118,10 @@ Prerequisites:
 npm install
 
 # Run tests
-npm test                    # 1 frontend test
-cd src-tauri && cargo test  # 95 Rust tests
+npm test                    # 4 frontend tests
+cd src-tauri && cargo test  # 139 Rust tests
 
-# Run the app (opens a window — no device connection yet)
+# Run the app (opens a window with mock device data)
 cargo tauri dev
 ```
 
