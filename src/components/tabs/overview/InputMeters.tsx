@@ -7,13 +7,15 @@ interface InputMetersProps {
 }
 
 function ChannelStrip({ input, level }: { input: InputState; level: number }) {
-  const label = input.type === "spdif"
+  const { getLabel } = useDevice();
+  const defaultLabel = input.type === "spdif"
     ? input.index === 0 ? "L" : "R"
     : `${input.index + 1}`;
+  const label = getLabel("inputs", `${input.type}_${input.index}`, defaultLabel);
 
   return (
     <div className="flex flex-col items-center gap-1">
-      <span className="text-[10px] text-neutral-400 font-mono">{label}</span>
+      <span className="text-[10px] text-neutral-400 font-mono truncate max-w-[40px]" title={label}>{label}</span>
       <MeterBar level={level} />
     </div>
   );
