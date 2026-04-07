@@ -187,6 +187,14 @@ TDD: every command and parser gets a test BEFORE implementation.
 
 - [ ] Reach out to Geoffrey Bennett for advice
 - [ ] Investigate Gen 4 FCP protocol support
+- [ ] **MIDI controller mapping** — Map any MIDI CC input to mixer controls. Architecture:
+  - **MIDI input via `midir` crate** — enumerate and listen to all MIDI ports (USB controllers via OS MIDI API + Scarlett's DIN MIDI ports via USB-MIDI Interface 5)
+  - **Mapping table** — `{ midi_channel, cc_number } → { action, bus, channel }`. Actions: `bus_master`, `channel_gain`, `mute_toggle`, `solo_toggle`, `dim_toggle`, `mute_toggle_master`, `talkback_toggle`
+  - **CC value scaling** — MIDI 0-127 → dB range (-80 to +6 for mixer gains, -127 to 0 for output volume). Configurable curve (linear, logarithmic, audio taper)
+  - **MIDI Learn mode** — toggle in Settings or Mixer tab. When active, click a fader or button, then move a MIDI knob/fader — mapping auto-created. Visual feedback shows which control is waiting for MIDI input.
+  - **Mappings stored** in `%USERPROFILE%/knivesonstrings/redmatrix/midi_mappings_{serial}.json`
+  - **Bidirectional** (future): send MIDI CC back to motorized fader controllers to reflect current state
+  - Use cases: Korg nanoKONTROL for headphone mix control, Behringer X-Touch Mini for bus masters, any MIDI controller for hands-on mixing
 - [ ] **Undo/redo stack** — Snapshot DeviceState before each command, push to undo history. Ctrl+Z to undo (send inverse command to restore previous state), Ctrl+Shift+Z to redo. Client-side state history with configurable depth (e.g., 50 steps). Essential for mixer workflow — "oops, wrong fader" should be one keystroke to fix.
 - [ ] **VCA-style fader groups** — if the 12 hardware mixer buses aren't sufficient for grouping, add a software VCA layer. Deferred: the buses already serve as subgroups and can be custom-labeled. Revisit only if users request it.
 - [ ] **MCP server / AI agent interface** — Expose RedMatrix as an MCP (Model Context Protocol) server so AI agents (Claude, etc.) can read device state and control the audio interface programmatically. Use cases: automated studio setup ("set up my podcast routing"), voice-controlled mixing, integration with DAW automation agents. The WebSocket API is already JSON-based — wrapping it as MCP tools would be straightforward.
