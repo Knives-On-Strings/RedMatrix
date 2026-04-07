@@ -129,9 +129,13 @@ The frame counter is sent explicitly (not implicit) to allow recovery from dropp
 
 **Why separate keys:** Using the same key+nonce for both directions would cause nonce reuse when server frame 0 and client frame 0 collide, catastrophically breaking AES-GCM authentication. Separate keys per direction prevent this entirely.
 
-### Localhost Bypass
+### No Localhost Bypass
 
-Connections from `127.0.0.1` or `::1` skip the handshake entirely — no `server_hello`, no encryption. The first message from the server is `device_state`. This is used by the Tauri webview during development and by the desktop React app if it ever switches from IPC to WebSocket.
+All WebSocket connections require the full ECDH handshake and encryption, regardless of source address. There is no localhost exception.
+
+**Why:** A localhost bypass would allow any website's JavaScript to open `ws://127.0.0.1:18120/api` and gain unauthenticated control of the audio interface — including cranking monitors to +6dB or spamming `save_config`. The desktop UI uses Tauri IPC (not WebSocket), so there is no legitimate use case for unauthenticated localhost connections.
+
+For development/testing, pair a test client using the normal pairing flow. This is a one-time setup per dev machine.
 
 ## Message Types
 
