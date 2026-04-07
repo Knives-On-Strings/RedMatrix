@@ -11,62 +11,52 @@ const PORT_COLORS: Record<PortType, string> = {
   pcm: "bg-green-600",
 };
 
-interface SourceDef {
+interface PortDef {
   type: PortType;
   index: number;
   label: string;
   color: string;
+  group: string;
 }
 
-function buildSourceList(state: DeviceState): SourceDef[] {
-  const sources: SourceDef[] = [];
+function buildSourceList(state: DeviceState): PortDef[] {
+  const sources: PortDef[] = [];
 
-  // PCM (DAW outputs)
   for (let i = 0; i < state.port_counts.pcm.outputs; i++) {
-    sources.push({ type: "pcm", index: i, label: `P${i + 1}`, color: PORT_COLORS.pcm });
+    sources.push({ type: "pcm", index: i, label: `P${i + 1}`, color: PORT_COLORS.pcm, group: "PCM" });
   }
-  // Analogue inputs
   for (let i = 0; i < state.port_counts.analogue.inputs; i++) {
-    sources.push({ type: "analogue", index: i, label: `An${i + 1}`, color: PORT_COLORS.analogue });
+    sources.push({ type: "analogue", index: i, label: `An${i + 1}`, color: PORT_COLORS.analogue, group: "Analogue" });
   }
-  // S/PDIF inputs
   for (let i = 0; i < state.port_counts.spdif.inputs; i++) {
-    sources.push({ type: "spdif", index: i, label: i === 0 ? "SPL" : "SPR", color: PORT_COLORS.spdif });
+    sources.push({ type: "spdif", index: i, label: i === 0 ? "SPL" : "SPR", color: PORT_COLORS.spdif, group: "S/PDIF" });
   }
-  // ADAT inputs
   for (let i = 0; i < state.port_counts.adat.inputs; i++) {
-    sources.push({ type: "adat", index: i, label: `AD${i + 1}`, color: PORT_COLORS.adat });
+    sources.push({ type: "adat", index: i, label: `AD${i + 1}`, color: PORT_COLORS.adat, group: "ADAT" });
   }
-  // Mixer bus outputs
   for (let i = 0; i < Math.min(state.port_counts.mix.outputs, 25); i++) {
-    sources.push({ type: "mix", index: i, label: `M${String.fromCharCode(65 + i)}`, color: PORT_COLORS.mix });
+    sources.push({ type: "mix", index: i, label: `M${String.fromCharCode(65 + i)}`, color: PORT_COLORS.mix, group: "Mix" });
   }
-  // Off
-  sources.push({ type: "off", index: 0, label: "Off", color: PORT_COLORS.off });
+  sources.push({ type: "off", index: 0, label: "Off", color: PORT_COLORS.off, group: "" });
 
   return sources;
 }
 
-interface DestDef {
-  index: number;
-  label: string;
-  group: string;
-  color: string;
-}
-
-function buildDestList(state: DeviceState): DestDef[] {
-  const dests: DestDef[] = [];
+function buildDestList(state: DeviceState): PortDef[] {
+  const dests: PortDef[] = [];
   let idx = 0;
 
   for (let i = 0; i < state.port_counts.analogue.outputs; i++) {
-    const name = state.outputs[i]?.name ?? `Analogue ${i + 1}`;
-    dests.push({ index: idx++, label: name, group: "Analogue", color: PORT_COLORS.analogue });
+    const name = state.outputs[i]?.name ?? `An${i + 1}`;
+    // Abbreviate for column headers
+    const short = name.replace("Monitor ", "M").replace("Headphones ", "HP").replace("Line ", "L");
+    dests.push({ type: "analogue", index: idx++, label: short, color: PORT_COLORS.analogue, group: "Analogue" });
   }
   for (let i = 0; i < state.port_counts.spdif.outputs; i++) {
-    dests.push({ index: idx++, label: `S/PDIF ${i === 0 ? "L" : "R"}`, group: "S/PDIF", color: PORT_COLORS.spdif });
+    dests.push({ type: "spdif", index: idx++, label: i === 0 ? "SPL" : "SPR", color: PORT_COLORS.spdif, group: "S/PDIF" });
   }
   for (let i = 0; i < state.port_counts.adat.outputs; i++) {
-    dests.push({ index: idx++, label: `ADAT ${i + 1}`, group: "ADAT", color: PORT_COLORS.adat });
+    dests.push({ type: "adat", index: idx++, label: `AD${i + 1}`, color: PORT_COLORS.adat, group: "ADAT" });
   }
 
   return dests;
@@ -85,11 +75,24 @@ function RouteCell({ active, sourceColor, onClick }: {
           ? `${sourceColor} border-white/30`
           : "bg-neutral-800 border-neutral-700/50 hover:border-neutral-500"
       }`}
-      title={active ? "Active" : "Click to route"}
     >
       {active && <span className="text-[8px] text-white font-bold">●</span>}
     </button>
   );
+}
+
+function groupBy(items: PortDef[]): { label: string; count: number; color: string }[] {
+  const groups: { label: string; count: number; color: string }[] = [];
+  let lastGroup = "";
+  for (const item of items) {
+    if (item.group !== lastGroup) {
+      groups.push({ label: item.group, count: 0, color: item.color });
+      lastGroup = item.group;
+    }
+    const g = groups[groups.length - 1];
+    if (g) g.count++;
+  }
+  return groups;
 }
 
 export default function Routing() {
@@ -107,43 +110,25 @@ export default function Routing() {
     );
   }
 
-  const sources = buildSourceList(state);
-  const dests = buildDestList(state);
+  const sources = buildSourceList(state); // rows (left)
+  const dests = buildDestList(state);     // columns (top)
+  const destGroups = groupBy(dests);
 
-  const handleCellClick = (_destIdx: number, _source: SourceDef) => {
+  const handleCellClick = (_destIdx: number, _source: PortDef) => {
     // TODO: send set_route via transport
   };
 
-  // Check if a source matches the current route for a destination
-  const isActive = (destIdx: number, source: SourceDef) => {
+  const isActive = (destIdx: number, source: PortDef) => {
     const route = state.routing[destIdx];
     if (!route) return false;
     return route.type === source.type && route.index === source.index;
   };
 
-  // Group headers for sources (find where each type starts)
-  const sourceGroups: { label: string; startCol: number; count: number; color: string }[] = [];
-  let lastType = "";
-  for (let i = 0; i < sources.length; i++) {
-    const src = sources[i]!;
-    if (src.type !== lastType) {
-      sourceGroups.push({
-        label: src.type === "off" ? "" : src.type.toUpperCase(),
-        startCol: i,
-        count: 0,
-        color: src.color,
-      });
-      lastType = src.type;
-    }
-    const lastGroup = sourceGroups[sourceGroups.length - 1];
-    if (lastGroup) lastGroup.count++;
-  }
-
   return (
     <div className="flex flex-col h-full overflow-auto p-4">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm text-neutral-300 font-medium">
-          Signal Routing ({dests.length} destinations × {sources.length} sources)
+          Patchbay ({sources.length} sources → {dests.length} destinations)
         </h3>
         <div className="flex gap-2">
           <button className="text-[10px] px-2 py-1 bg-neutral-700 text-neutral-400 rounded hover:bg-neutral-600">
@@ -157,11 +142,11 @@ export default function Routing() {
 
       <div className="overflow-auto">
         <table className="border-collapse">
-          {/* Source group headers */}
           <thead>
+            {/* Destination group headers */}
             <tr>
-              <th className="w-28" />
-              {sourceGroups.map((group, gi) => (
+              <th className="w-12" />
+              {destGroups.map((group, gi) => (
                 <th
                   key={gi}
                   colSpan={group.count}
@@ -171,31 +156,33 @@ export default function Routing() {
                 </th>
               ))}
             </tr>
+            {/* Destination labels (columns) */}
             <tr>
-              <th className="w-28" />
-              {sources.map((src, si) => (
-                <th key={si} className="px-0.5 pb-1">
+              <th className="w-12" />
+              {dests.map((dest, di) => (
+                <th key={di} className="px-0.5 pb-1">
                   <div className="flex flex-col items-center">
-                    <div className={`w-1.5 h-1.5 rounded-full ${src.color} mb-0.5`} />
-                    <span className="text-[7px] text-neutral-500 font-mono">{src.label}</span>
+                    <div className={`w-1.5 h-1.5 rounded-full ${dest.color} mb-0.5`} />
+                    <span className="text-[7px] text-neutral-500 font-mono whitespace-nowrap">
+                      {dest.label}
+                    </span>
                   </div>
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {dests.map((dest) => (
-              <tr key={dest.index}>
-                <td className="pr-2 py-0.5">
-                  <div className="flex items-center gap-1.5">
-                    <div className={`w-1.5 h-1.5 rounded-full ${dest.color}`} />
-                    <span className="text-[9px] text-neutral-400 truncate max-w-[100px]">
-                      {dest.label}
-                    </span>
+            {/* Source labels (rows) → destination cells */}
+            {sources.map((src) => (
+              <tr key={`${src.type}-${src.index}`}>
+                <td className="pr-1.5 py-0.5">
+                  <div className="flex items-center gap-1">
+                    <div className={`w-1.5 h-1.5 rounded-full ${src.color}`} />
+                    <span className="text-[8px] text-neutral-400 font-mono">{src.label}</span>
                   </div>
                 </td>
-                {sources.map((src, si) => (
-                  <td key={si} className="px-0.5 py-0.5">
+                {dests.map((dest, di) => (
+                  <td key={di} className="px-0.5 py-0.5">
                     <RouteCell
                       active={isActive(dest.index, src)}
                       sourceColor={src.color}

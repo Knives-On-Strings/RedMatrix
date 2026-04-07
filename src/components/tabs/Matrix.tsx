@@ -6,7 +6,6 @@ function GainCell({ db, onClick }: { db: number; onClick: () => void }) {
   const isActive = db > -80;
   const isUnity = Math.abs(db) < 0.5;
 
-  // Color intensity based on gain level
   let bg = "bg-neutral-800";
   if (isUnity) {
     bg = "bg-green-600";
@@ -49,7 +48,7 @@ export default function Matrix() {
   const inputCount = state.mixer.gains[0]?.length ?? 0;
   const busLabel = (i: number) => String.fromCharCode(65 + i);
 
-  // Input labels
+  // Input labels (rows = sources)
   const inputLabels: string[] = [];
   const analogue = state.inputs.filter((i) => i.type === "analogue");
   const spdif = state.inputs.filter((i) => i.type === "spdif");
@@ -57,20 +56,19 @@ export default function Matrix() {
   for (const inp of analogue) inputLabels.push(`An${inp.index + 1}`);
   for (const inp of spdif) inputLabels.push(`SP${inp.index === 0 ? "L" : "R"}`);
   for (const inp of adat) inputLabels.push(`AD${inp.index + 1}`);
-  // Pad with PCM labels if needed
   while (inputLabels.length < inputCount) {
     inputLabels.push(`P${inputLabels.length - analogue.length - spdif.length - adat.length + 1}`);
   }
 
   const handleCellClick = (_bus: number, _channel: number) => {
-    // TODO: toggle between 0dB and -80dB, or open a gain input
+    // TODO: toggle between 0dB and -80dB, or open gain input
   };
 
   return (
     <div className="flex flex-col h-full overflow-auto p-4">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm text-neutral-300 font-medium">
-          DSP Mixer Matrix ({inputCount} inputs × {busCount} buses)
+          DSP Mixer ({inputCount} inputs → {busCount} buses)
         </h3>
         <div className="flex gap-2">
           <button className="text-[10px] px-2 py-1 bg-neutral-700 text-neutral-400 rounded hover:bg-neutral-600">
@@ -85,8 +83,9 @@ export default function Matrix() {
       <div className="overflow-auto">
         <table className="border-collapse">
           <thead>
+            {/* Bus labels as columns (destinations) */}
             <tr>
-              <th className="w-10" />
+              <th className="w-12" />
               {Array.from({ length: busCount }, (_, i) => (
                 <th key={i} className="text-[9px] text-neutral-500 font-mono px-0.5 pb-1">
                   {busLabel(i)}
@@ -95,6 +94,7 @@ export default function Matrix() {
             </tr>
           </thead>
           <tbody>
+            {/* Input labels as rows (sources) */}
             {Array.from({ length: inputCount }, (_, ch) => (
               <tr key={ch}>
                 <td className="text-[9px] text-neutral-500 font-mono pr-2 text-right">
