@@ -8,27 +8,61 @@ export interface PortDef {
   color: string;
 }
 
-export function buildSourceList(state: DeviceState): PortDef[] {
-  const sources: PortDef[] = [];
+export interface SourceGroup {
+  label: string;
+  color: string;
+  sources: PortDef[];
+}
 
+export function buildSourceGroups(state: DeviceState): SourceGroup[] {
+  const groups: SourceGroup[] = [];
+
+  // Off at the top
+  groups.push({ label: "", color: PORT_COLORS.off, sources: [
+    { type: "off", index: 0, label: "Off", color: PORT_COLORS.off },
+  ]});
+
+  // PCM
+  const pcm: PortDef[] = [];
   for (let i = 0; i < state.port_counts.pcm.outputs; i++) {
-    sources.push({ type: "pcm", index: i, label: `DAW Out ${i + 1}`, color: PORT_COLORS.pcm });
+    pcm.push({ type: "pcm", index: i, label: `DAW Out ${i + 1}`, color: PORT_COLORS.pcm });
   }
-  for (let i = 0; i < state.port_counts.analogue.inputs; i++) {
-    sources.push({ type: "analogue", index: i, label: `Analogue In ${i + 1}`, color: PORT_COLORS.analogue });
-  }
-  for (let i = 0; i < state.port_counts.spdif.inputs; i++) {
-    sources.push({ type: "spdif", index: i, label: `S/PDIF In ${i === 0 ? "L" : "R"}`, color: PORT_COLORS.spdif });
-  }
-  for (let i = 0; i < state.port_counts.adat.inputs; i++) {
-    sources.push({ type: "adat", index: i, label: `ADAT In ${i + 1}`, color: PORT_COLORS.adat });
-  }
-  for (let i = 0; i < state.port_counts.mix.outputs; i++) {
-    sources.push({ type: "mix", index: i, label: `Mix ${busLabel(i)}`, color: PORT_COLORS.mix });
-  }
-  sources.push({ type: "off", index: 0, label: "Off", color: PORT_COLORS.off });
+  if (pcm.length > 0) groups.push({ label: "PCM from DAW", color: PORT_COLORS.pcm, sources: pcm });
 
-  return sources;
+  // Analogue
+  const analogue: PortDef[] = [];
+  for (let i = 0; i < state.port_counts.analogue.inputs; i++) {
+    analogue.push({ type: "analogue", index: i, label: `Analogue In ${i + 1}`, color: PORT_COLORS.analogue });
+  }
+  if (analogue.length > 0) groups.push({ label: "Analogue In", color: PORT_COLORS.analogue, sources: analogue });
+
+  // S/PDIF
+  const spdif: PortDef[] = [];
+  for (let i = 0; i < state.port_counts.spdif.inputs; i++) {
+    spdif.push({ type: "spdif", index: i, label: `S/PDIF In ${i === 0 ? "L" : "R"}`, color: PORT_COLORS.spdif });
+  }
+  if (spdif.length > 0) groups.push({ label: "S/PDIF In", color: PORT_COLORS.spdif, sources: spdif });
+
+  // ADAT
+  const adat: PortDef[] = [];
+  for (let i = 0; i < state.port_counts.adat.inputs; i++) {
+    adat.push({ type: "adat", index: i, label: `ADAT In ${i + 1}`, color: PORT_COLORS.adat });
+  }
+  if (adat.length > 0) groups.push({ label: "ADAT In", color: PORT_COLORS.adat, sources: adat });
+
+  // Mixer buses
+  const mix: PortDef[] = [];
+  for (let i = 0; i < state.port_counts.mix.outputs; i++) {
+    mix.push({ type: "mix", index: i, label: `Mix ${busLabel(i)}`, color: PORT_COLORS.mix });
+  }
+  if (mix.length > 0) groups.push({ label: "Mixer Out", color: PORT_COLORS.mix, sources: mix });
+
+  return groups;
+}
+
+/** Flat list of all sources (for backward compat) */
+export function buildSourceList(state: DeviceState): PortDef[] {
+  return buildSourceGroups(state).flatMap((g) => g.sources);
 }
 
 export function buildDestList(state: DeviceState): PortDef[] {

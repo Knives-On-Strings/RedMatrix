@@ -1,6 +1,7 @@
+import { useState } from "react";
 import type { DeviceState } from "../../../types";
 import { useDevice } from "../../../hooks/useDevice";
-import { buildSourceList, buildDestList, type PortDef } from "../../../utils/routing";
+import { buildSourceGroups, buildDestList, type PortDef, type SourceGroup } from "../../../utils/routing";
 
 interface OutputMatrixProps {
   state: DeviceState;
@@ -35,8 +36,19 @@ export default function OutputMatrix({ state }: OutputMatrixProps) {
   }
 
   const { sendCommand } = useDevice();
-  const sources = buildSourceList(state);
+  const sourceGroups = buildSourceGroups(state);
   const dests = buildDestList(state);
+
+  // Track which groups are collapsed
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const toggleGroup = (label: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  };
 
   const handleCellClick = (destIdx: number, source: PortDef) => {
     sendCommand({
@@ -50,7 +62,6 @@ export default function OutputMatrix({ state }: OutputMatrixProps) {
   };
 
   const handleDirect = () => {
-    // Route PCM 1:1 to outputs (default factory routing)
     dests.forEach((dest, i) => {
       sendCommand({
         type: "set_route",
@@ -78,7 +89,7 @@ export default function OutputMatrix({ state }: OutputMatrixProps) {
     <div className="p-4">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm text-neutral-300 font-medium">
-          Source &rarr; Output ({sources.length} sources &rarr; {dests.length} destinations)
+          Source &rarr; Output ({dests.length} destinations)
         </h3>
         <div className="flex gap-2">
           <button onClick={handleDirect} className="text-[10px] px-2 py-1 bg-neutral-700 text-neutral-400 rounded hover:bg-neutral-600">
@@ -91,7 +102,7 @@ export default function OutputMatrix({ state }: OutputMatrixProps) {
       </div>
 
       <div className="text-[9px] text-neutral-600 mb-2">
-        Rows = signal sources &rarr; Columns = output destinations. Click to route. One source per destination.
+        Rows = signal sources &rarr; Columns = output destinations. Click to route. Click group headers to collapse.
       </div>
 
       <div className="overflow-auto">
@@ -112,30 +123,82 @@ export default function OutputMatrix({ state }: OutputMatrixProps) {
             </tr>
           </thead>
           <tbody>
-            {sources.map((src) => (
-              <tr key={`${src.type}-${src.index}`}>
-                <td className="pr-1.5 py-0.5">
-                  <div className="flex items-center gap-1">
-                    <div className={`w-1.5 h-1.5 rounded-full ${src.color} flex-shrink-0`} />
-                    <span className="text-[7px] text-neutral-400 font-mono whitespace-nowrap">
-                      {src.label}
-                    </span>
-                  </div>
-                </td>
-                {dests.map((dest, di) => (
-                  <td key={di} className="px-0.5 py-0.5">
-                    <RouteCell
-                      active={isActive(dest.index, src)}
-                      sourceColor={src.color}
-                      onClick={() => handleCellClick(dest.index, src)}
-                    />
-                  </td>
-                ))}
-              </tr>
-            ))}
+            {sourceGroups.map((group) => {
+              const isCollapsed = collapsed.has(group.label);
+              const isCollapsible = group.sources.length > 1 && group.label !== "";
+
+              return (
+                <GroupRows
+                  key={group.label || "off"}
+                  group={group}
+                  dests={dests}
+                  isCollapsed={isCollapsed}
+                  isCollapsible={isCollapsible}
+                  onToggle={() => toggleGroup(group.label)}
+                  isActive={isActive}
+                  onCellClick={handleCellClick}
+                />
+              );
+            })}
           </tbody>
         </table>
       </div>
     </div>
+  );
+}
+
+function GroupRows({ group, dests, isCollapsed, isCollapsible, onToggle, isActive, onCellClick }: {
+  group: SourceGroup;
+  dests: PortDef[];
+  isCollapsed: boolean;
+  isCollapsible: boolean;
+  onToggle: () => void;
+  isActive: (destIdx: number, source: PortDef) => boolean;
+  onCellClick: (destIdx: number, source: PortDef) => void;
+}) {
+  return (
+    <>
+      {/* Group header row (clickable to collapse) */}
+      {isCollapsible && (
+        <tr>
+          <td
+            colSpan={dests.length + 1}
+            className="pt-2 pb-0.5 cursor-pointer select-none"
+            onClick={onToggle}
+          >
+            <div className="flex items-center gap-1.5">
+              <span className="text-[8px] text-neutral-600">{isCollapsed ? "▶" : "▼"}</span>
+              <div className={`w-2 h-2 rounded-full ${group.color}`} />
+              <span className="text-[9px] text-neutral-500 uppercase tracking-wider font-medium">
+                {group.label}
+              </span>
+              <span className="text-[8px] text-neutral-600">({group.sources.length})</span>
+            </div>
+          </td>
+        </tr>
+      )}
+      {/* Source rows (hidden when collapsed) */}
+      {(!isCollapsed || !isCollapsible) && group.sources.map((src) => (
+        <tr key={`${src.type}-${src.index}`}>
+          <td className="pr-1.5 py-0.5">
+            <div className="flex items-center gap-1">
+              <div className={`w-1.5 h-1.5 rounded-full ${src.color} flex-shrink-0`} />
+              <span className="text-[7px] text-neutral-400 font-mono whitespace-nowrap">
+                {src.label}
+              </span>
+            </div>
+          </td>
+          {dests.map((dest, di) => (
+            <td key={di} className="px-0.5 py-0.5">
+              <RouteCell
+                active={isActive(dest.index, src)}
+                sourceColor={src.color}
+                onClick={() => onCellClick(dest.index, src)}
+              />
+            </td>
+          ))}
+        </tr>
+      ))}
+    </>
   );
 }
