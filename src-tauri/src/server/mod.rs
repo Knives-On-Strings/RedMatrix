@@ -6,7 +6,9 @@
 
 pub mod broadcast;
 pub mod crypto;
+pub mod mdns;
 pub mod messages;
+pub mod session;
 pub mod state;
 
 pub const DEFAULT_PORT: u16 = 18120;

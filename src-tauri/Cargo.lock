@@ -3082,6 +3082,7 @@ dependencies = [
  "aes-gcm",
  "base64 0.22.1",
  "env_logger",
+ "futures-util",
  "hkdf",
  "log",
  "mdns-sd",

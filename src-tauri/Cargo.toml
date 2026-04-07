@@ -27,6 +27,7 @@ aes-gcm = "0.10"
 rand = "0.8"
 base64 = "0.22"
 mdns-sd = "0.12"
+futures-util = "0.3"
 
 [features]
 default = ["custom-protocol"]
