@@ -146,6 +146,8 @@ export function DeviceProvider(props: DeviceProviderProps) {
       await transportRef.current.sendCommand(msg);
     } catch (e) {
       console.error("Command failed:", e);
+      const { showToast } = await import("../components/Toast");
+      showToast(`Command failed: ${e instanceof Error ? e.message : "unknown error"}`, "error");
     }
   }, []);
 

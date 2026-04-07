@@ -1,7 +1,8 @@
 import { useState } from "react";
 import type { InputState } from "../../types";
 import { useDevice } from "../../hooks/useDevice";
-import { dbToNormalized, normalizedToDb, formatDb, busLabel as busLabelFn, mockMeterLevel } from "../../constants";
+import { dbToNormalized, normalizedToDb, formatDb, busLabel as busLabelFn } from "../../constants";
+import { useMockMeters } from "../../hooks/useMockMeters";
 import MeterBar from "../MeterBar";
 
 function Fader({ value, onChange }: { value: number; onChange: (v: number) => void }) {
@@ -28,7 +29,7 @@ function Fader({ value, onChange }: { value: number; onChange: (v: number) => vo
   );
 }
 
-function ChannelStrip({ input, gainDb, soloed, muted, onGainChange, onSoloToggle, onMuteToggle }: {
+function ChannelStrip({ input, gainDb, soloed, muted, onGainChange, onSoloToggle, onMuteToggle, level }: {
   input: InputState;
   gainDb: number;
   soloed: boolean;
@@ -36,8 +37,8 @@ function ChannelStrip({ input, gainDb, soloed, muted, onGainChange, onSoloToggle
   onGainChange: (db: number) => void;
   onSoloToggle: () => void;
   onMuteToggle: () => void;
+  level: number;
 }) {
-  const level = mockMeterLevel();
   const { getLabel } = useDevice();
   const defaultLabel = input.type === "spdif"
     ? `S/${input.index === 0 ? "L" : "R"}`
@@ -92,12 +93,13 @@ function ChannelStrip({ input, gainDb, soloed, muted, onGainChange, onSoloToggle
   );
 }
 
-function ChannelGroup({ label, inputs, gains, solos, mutes, busIndex, indexOffset, onGainChange, onSoloToggle, onMuteToggle }: {
+function ChannelGroup({ label, inputs, gains, solos, mutes, levels, busIndex, indexOffset, onGainChange, onSoloToggle, onMuteToggle }: {
   label: string;
   inputs: InputState[];
   gains: number[];
   solos: boolean[];
   mutes: boolean[];
+  levels: number[];
   busIndex: number;
   indexOffset: number;
   onGainChange: (bus: number, ch: number, db: number) => void;
@@ -116,6 +118,7 @@ function ChannelGroup({ label, inputs, gains, solos, mutes, busIndex, indexOffse
             gainDb={gains[i] ?? -80}
             soloed={solos[i] ?? false}
             muted={mutes[i] ?? false}
+            level={levels[i] ?? 0}
             onGainChange={(db) => onGainChange(busIndex, indexOffset + i, db)}
             onSoloToggle={() => onSoloToggle(busIndex, indexOffset + i)}
             onMuteToggle={() => onMuteToggle(busIndex, indexOffset + i)}
@@ -251,6 +254,8 @@ export default function Mixer() {
   const analogue = state.inputs.filter((i) => i.type === "analogue");
   const spdif = state.inputs.filter((i) => i.type === "spdif");
   const adat = state.inputs.filter((i) => i.type === "adat");
+  const totalChannels = analogue.length + spdif.length + adat.length;
+  const meterLevels = useMockMeters(totalChannels);
 
   const handleGainChange = (bus: number, ch: number, db: number) => {
     sendCommand({ type: "set_mix_gain", payload: { mix: bus, channel: ch, gain_db: db } });
@@ -294,6 +299,7 @@ export default function Mixer() {
             gains={busGains.slice(0, analogue.length)}
             solos={busSolos.slice(0, analogue.length)}
             mutes={busMutes.slice(0, analogue.length)}
+            levels={Array.from(meterLevels.slice(0, analogue.length))}
             busIndex={activeBus}
             indexOffset={0}
             onGainChange={handleGainChange}
@@ -309,6 +315,7 @@ export default function Mixer() {
                 gains={busGains.slice(analogue.length, analogue.length + spdif.length)}
                 solos={busSolos.slice(analogue.length, analogue.length + spdif.length)}
                 mutes={busMutes.slice(analogue.length, analogue.length + spdif.length)}
+                levels={Array.from(meterLevels.slice(analogue.length, analogue.length + spdif.length))}
                 busIndex={activeBus}
                 indexOffset={analogue.length}
                 onGainChange={handleGainChange}
@@ -326,6 +333,7 @@ export default function Mixer() {
                 gains={busGains.slice(analogue.length + spdif.length)}
                 solos={busSolos.slice(analogue.length + spdif.length)}
                 mutes={busMutes.slice(analogue.length + spdif.length)}
+                levels={Array.from(meterLevels.slice(analogue.length + spdif.length))}
                 busIndex={activeBus}
                 indexOffset={analogue.length + spdif.length}
                 onGainChange={handleGainChange}

@@ -1,5 +1,5 @@
 import type { DeviceState, InputState } from "../../../types";
-import { mockMeterLevel } from "../../../constants";
+import { useMockMeters } from "../../../hooks/useMockMeters";
 import MeterBar from "../../MeterBar";
 
 interface InputMetersProps {
@@ -39,10 +39,12 @@ export default function InputMeters({ state }: InputMetersProps) {
   const spdif = state.inputs.filter((i) => i.type === "spdif");
   const adat = state.inputs.filter((i) => i.type === "adat");
 
-  // Mock meter levels (will be replaced by real meter data from transport)
-  const analogueLevels = analogue.map(() => mockMeterLevel());
-  const spdifLevels = spdif.map(() => mockMeterLevel());
-  const adatLevels = adat.map(() => mockMeterLevel());
+  const totalInputs = analogue.length + spdif.length + adat.length;
+  const meters = useMockMeters(totalInputs);
+
+  const analogueLevels = Array.from(meters.slice(0, analogue.length));
+  const spdifLevels = Array.from(meters.slice(analogue.length, analogue.length + spdif.length));
+  const adatLevels = Array.from(meters.slice(analogue.length + spdif.length));
 
   return (
     <div className="flex items-end gap-6 px-4">

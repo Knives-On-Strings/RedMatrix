@@ -1,16 +1,13 @@
 import type { DeviceState, OutputState } from "../../../types";
-import { mockMeterLevel } from "../../../constants";
+import { useMockMeters } from "../../../hooks/useMockMeters";
 
 interface OutputLevelsProps {
   state: DeviceState;
 }
 
-function OutputRow({ output, isInactive }: { output: OutputState; isInactive: boolean }) {
-  // Mock level bar (will be real meter data later)
-  const level = output.muted ? 0 : mockMeterLevel();
-  const width = Math.max(0, Math.min(100, level * 100));
+function OutputRow({ output, isInactive, level }: { output: OutputState; isInactive: boolean; level: number }) {
+  const width = Math.max(0, Math.min(100, (output.muted ? 0 : level) * 100));
 
-  // Determine badges
   const badges: string[] = [];
   if (output.name.includes("Monitor 1")) badges.push("MAIN");
   if (output.name.includes("Monitor 2")) badges.push("ALT");
@@ -41,19 +38,19 @@ function OutputRow({ output, isInactive }: { output: OutputState; isInactive: bo
 
 export default function OutputLevels({ state }: OutputLevelsProps) {
   const isAlt = state.monitor.speaker_switching === "alt";
+  const meters = useMockMeters(state.outputs.length);
 
   return (
     <div className="px-4">
       <h3 className="text-xs text-neutral-500 uppercase tracking-wider mb-2">Outputs</h3>
       <div className="space-y-0.5">
-        {state.outputs.map((output) => {
-          // Dim MAIN outputs when ALT is active, and vice versa
+        {state.outputs.map((output, i) => {
           const isMainOutput = output.name.includes("Monitor 1");
           const isAltOutput = output.name.includes("Monitor 2");
           const isInactive = (isAlt && isMainOutput) || (!isAlt && isAltOutput);
 
           return (
-            <OutputRow key={output.index} output={output} isInactive={isInactive} />
+            <OutputRow key={output.index} output={output} isInactive={isInactive} level={meters[i] ?? 0} />
           );
         })}
       </div>

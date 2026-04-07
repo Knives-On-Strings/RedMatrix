@@ -9,6 +9,7 @@ import Input from "./components/tabs/Input";
 import Output from "./components/tabs/Output";
 import Settings from "./components/tabs/Settings";
 import About from "./components/About";
+import { ToastContainer } from "./components/Toast";
 
 const TAB_COMPONENTS: Record<TabName, React.FC> = {
   Overview,
@@ -48,6 +49,7 @@ function App() {
         <Footer />
 
         {showAbout && <About onClose={() => setShowAbout(false)} />}
+        <ToastContainer />
       </div>
     </DeviceProvider>
   );
