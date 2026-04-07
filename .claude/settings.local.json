@@ -26,7 +26,10 @@
       "Bash(python scripts/03_read_state.py)",
       "Bash(npx tsc:*)",
       "Bash(cargo build:*)",
-      "Bash(cargo check:*)"
+      "Bash(cargo check:*)",
+      "Bash(gh repo:*)",
+      "Bash(mkdir -p S:/Dev/audio/redmatrix/tests/fixtures/alsa-states)",
+      "Bash(gh api:*)"
     ]
   }
 }

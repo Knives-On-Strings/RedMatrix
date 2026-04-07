@@ -5,6 +5,12 @@ import App from "./App";
 // Mock the Tauri invoke API so DeviceProvider doesn't try real IPC
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn((cmd: string) => {
+    if (cmd === "list_mock_devices") {
+      return Promise.resolve([
+        [0x8215, "Scarlett 18i20 Gen 3"],
+        [0x8211, "Scarlett Solo Gen 3"],
+      ]);
+    }
     if (cmd === "get_device_state") {
       return Promise.resolve({
         device: { name: "Scarlett 18i20 USB", pid: "0x8215", series: "Scarlett Gen 3", firmware_version: 1644, serial: "TEST" },
@@ -41,9 +47,9 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 describe("App", () => {
-  it("renders the header with connection status", () => {
+  it("renders the header with mock indicator", () => {
     render(<App />);
-    expect(screen.getByText("No device")).toBeDefined();
+    expect(screen.getByText("Mock")).toBeDefined();
   });
 
   it("renders all tab buttons", async () => {

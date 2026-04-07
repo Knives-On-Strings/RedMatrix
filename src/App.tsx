@@ -21,14 +21,21 @@ function App() {
   const [activeTab, setActiveTab] = useState<TabName>("Overview");
   const [showSettings, setShowSettings] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
   const ActiveComponent = TAB_COMPONENTS[activeTab];
 
+  const handleDeviceSwitch = () => {
+    // Force re-mount of DeviceProvider to re-fetch state
+    setRefreshKey((k) => k + 1);
+  };
+
   return (
-    <DeviceProvider>
+    <DeviceProvider key={refreshKey}>
       <div className="min-h-screen bg-neutral-900 text-neutral-100 flex flex-col">
         <Header
           onSettingsClick={() => setShowSettings(!showSettings)}
           onAboutClick={() => setShowAbout(true)}
+          onDeviceSwitch={handleDeviceSwitch}
         />
         <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
         <main className="flex-1 relative">

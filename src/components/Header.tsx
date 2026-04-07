@@ -1,21 +1,21 @@
+import DeviceSelector from "./DeviceSelector";
+
 interface HeaderProps {
   onSettingsClick: () => void;
   onAboutClick: () => void;
+  onDeviceSwitch: () => void;
 }
 
-export default function Header({ onSettingsClick, onAboutClick }: HeaderProps) {
+export default function Header({ onSettingsClick, onAboutClick, onDeviceSwitch }: HeaderProps) {
   return (
     <header className="flex items-center justify-between px-4 py-2 bg-neutral-800 border-b border-neutral-700">
-      {/* Left: connection + sync */}
-      <div className="flex items-center gap-4">
+      {/* Left: connection + device selector */}
+      <div className="flex items-center gap-3">
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-neutral-500" />
-          <span className="text-sm text-neutral-400">No device</span>
+          <div className="w-2 h-2 rounded-full bg-amber-500" />
+          <span className="text-[10px] text-amber-400 font-bold uppercase">Mock</span>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-neutral-600" />
-          <span className="text-xs text-neutral-500">--</span>
-        </div>
+        <DeviceSelector onDeviceSwitch={onDeviceSwitch} />
       </div>
 
       {/* Center: transport buttons */}
