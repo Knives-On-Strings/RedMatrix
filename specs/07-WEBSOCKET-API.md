@@ -110,10 +110,15 @@ Sent immediately on WebSocket connect.
 After `auth_result: ok`:
 
 1. Both sides derive a shared secret using ECDH (P-256 curve) from their private key and the other party's public key.
-2. The shared secret is fed into HKDF-SHA256 to derive a 256-bit AES key and a 96-bit base IV.
-3. Every subsequent WebSocket frame (text and binary) is encrypted with AES-256-GCM.
-4. Each frame uses a unique nonce: `base_iv XOR frame_counter` (u64, incremented per frame, separate counters for each direction).
-5. The GCM authentication tag (16 bytes) is appended to the ciphertext.
+2. The shared secret is fed into HKDF-SHA256 to derive **separate keys and IVs for each direction** (88 bytes total):
+   - `server_write_key` (32 bytes) — server uses to encrypt, client uses to decrypt
+   - `client_write_key` (32 bytes) — client uses to encrypt, server uses to decrypt
+   - `server_write_iv` (12 bytes) — base IV for server→client frames
+   - `client_write_iv` (12 bytes) — base IV for client→server frames
+3. HKDF info string: `"redmatrix-ws-v1"`. Salt: concatenation of both public keys (server first).
+4. Every subsequent WebSocket frame (text and binary) is encrypted with AES-256-GCM using the direction-appropriate key.
+5. Each frame uses a unique nonce: `base_iv XOR (frame_counter as 12-byte LE, zero-padded)`. The XOR applies the 8-byte LE frame counter against the **last 8 bytes** of the 12-byte IV. Frame counters start at 0 and increment per frame, independently per direction.
+6. The GCM authentication tag (16 bytes) is appended to the ciphertext.
 
 **Encrypted frame format:**
 ```
@@ -121,6 +126,8 @@ After `auth_result: ok`:
 ```
 
 The frame counter is sent explicitly (not implicit) to allow recovery from dropped frames.
+
+**Why separate keys:** Using the same key+nonce for both directions would cause nonce reuse when server frame 0 and client frame 0 collide, catastrophically breaking AES-GCM authentication. Separate keys per direction prevent this entirely.
 
 ### Localhost Bypass
 
@@ -192,17 +199,21 @@ Sent once on connect. Contains the entire device state. The client builds its UI
     }
   ],
   "mixer": {
-    "gains": [[0.0, -80.0, -80.0], ["..."]]
+    "gains": [[0.0, -80.0, -80.0], ["..."]],
+    "soloed": [[false, false, false], ["..."]]
   },
   "routing": [
-    { "destination": "analogue_out_1", "source": "pcm_1" }
+    { "type": "pcm", "index": 0 },
+    { "type": "pcm", "index": 1 },
+    { "type": "mix", "index": 0 },
+    { "type": "off", "index": 0 }
   ]
 }
 ```
 
 The `mixer.gains` field is a 2D array: `gains[mix_bus][input_channel]` in dB. The bus count and input count come from `port_counts.mix`.
 
-The `routing` field is an array of destination→source mappings, one per mux output slot.
+The `routing` field is an array where the array index IS the mux destination slot. Each entry describes the source routed to that destination: `type` is one of `"off"`, `"analogue"`, `"spdif"`, `"adat"`, `"mix"`, `"pcm"`, and `index` is the 0-based port number within that type. This matches the `set_route` command format — no string↔index mapping needed.
 
 #### `state_update` (incremental change)
 
@@ -224,6 +235,8 @@ Sent whenever device state changes (from USB notification or from another client
 Uses dot-notation paths into the `device_state` structure. The client applies these as patches to its local state copy.
 
 Array indices are numeric: `outputs.0.volume_db` means `outputs[0].volume_db`.
+
+**Structural changes send full state instead.** When sample rate or S/PDIF mode changes, the port counts, routing table, mixer dimensions, and meter count all change simultaneously. Rather than patching arrays that have restructured, the server sends a fresh `device_state` message. The client discards its old state and rebuilds from scratch. Only `set_sample_rate`, `set_spdif_mode`, and `set_clock_source` (when it affects available ports) trigger this behavior.
 
 #### `meters` (binary frame)
 
@@ -318,7 +331,7 @@ Phantom power uses `group` index (not individual input index) because phantom is
 
 `mix` is the bus index (0 = A, 1 = B, etc.). `channel` is the input index within that bus.
 
-Solo is client-side — it mutes all other channels by zeroing their gains temporarily. `clear_solo` restores all gains.
+**Solo is server-side.** When a channel is soloed, the server holds the true mix gains in memory and sends zeroed gains to the hardware for all non-soloed channels on that bus. The `mixer.soloed` 2D array in `device_state` tracks which channels are soloed. All clients see the same solo state. If a client disconnects while solo is active, the server can still restore the original gains via `clear_solo` from any other client (or automatically on a configurable timeout).
 
 #### Routing Controls
 
