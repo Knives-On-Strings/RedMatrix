@@ -4,6 +4,7 @@
 //! Local connections (Tauri webview) bypass encryption.
 //! Remote connections use ECDH + AES-256-GCM.
 
+pub mod broadcast;
 pub mod crypto;
 pub mod messages;
 pub mod state;

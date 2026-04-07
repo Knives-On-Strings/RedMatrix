@@ -4,7 +4,7 @@
 //! and AES-256-GCM for authenticated encryption of WebSocket frames.
 //! Local (Tauri webview) connections bypass this entirely.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use aes_gcm::aead::Aead;
 use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
@@ -13,6 +13,7 @@ use hkdf::Hkdf;
 use p256::ecdh::diffie_hellman;
 use p256::elliptic_curve::sec1::ToEncodedPoint;
 use p256::{PublicKey, SecretKey};
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
@@ -262,6 +263,94 @@ impl SessionCrypto {
     }
 }
 
+// ---------------------------------------------------------------------------
+// PairedDeviceStore
+// ---------------------------------------------------------------------------
+
+/// A remote client (iPad) that has completed ECDH pairing with this server.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PairedDevice {
+    pub fingerprint: String,
+    pub public_key_base64: String,
+    pub name: String,
+    pub paired_at: u64, // Unix timestamp
+}
+
+/// Persistent store for paired remote clients.
+///
+/// Backed by a JSON file on disk. The desktop app loads this at startup and
+/// checks incoming client public keys against the list to accept or reject
+/// connections.
+pub struct PairedDeviceStore {
+    devices: Vec<PairedDevice>,
+    path: PathBuf,
+}
+
+impl PairedDeviceStore {
+    /// Create an empty in-memory store that will save to `path`.
+    pub fn new(path: PathBuf) -> Self {
+        Self {
+            devices: Vec::new(),
+            path,
+        }
+    }
+
+    /// Load a store from disk. Returns an empty store if the file doesn't exist.
+    pub fn load(path: PathBuf) -> Result<Self, CryptoError> {
+        match std::fs::read_to_string(&path) {
+            Ok(contents) => {
+                let devices: Vec<PairedDevice> = serde_json::from_str(&contents).map_err(|e| {
+                    CryptoError::InvalidKeyData(format!("invalid paired devices JSON: {e}"))
+                })?;
+                Ok(Self { devices, path })
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Self::new(path)),
+            Err(e) => Err(CryptoError::Io(e)),
+        }
+    }
+
+    /// Persist the current device list to disk as JSON.
+    pub fn save(&self) -> Result<(), CryptoError> {
+        let json = serde_json::to_string_pretty(&self.devices).map_err(|e| {
+            CryptoError::InvalidKeyData(format!("failed to serialize paired devices: {e}"))
+        })?;
+        if let Some(parent) = self.path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(&self.path, json)?;
+        Ok(())
+    }
+
+    /// Check whether a device with the given fingerprint is paired.
+    pub fn is_paired(&self, fingerprint: &str) -> bool {
+        self.devices.iter().any(|d| d.fingerprint == fingerprint)
+    }
+
+    /// Look up a paired device by fingerprint.
+    pub fn find_by_fingerprint(&self, fingerprint: &str) -> Option<&PairedDevice> {
+        self.devices.iter().find(|d| d.fingerprint == fingerprint)
+    }
+
+    /// Add a device, replacing any existing entry with the same fingerprint (re-pairing).
+    pub fn add(&mut self, device: PairedDevice) {
+        self.devices
+            .retain(|d| d.fingerprint != device.fingerprint);
+        self.devices.push(device);
+    }
+
+    /// Remove a device by fingerprint. Returns `true` if a device was removed.
+    pub fn remove(&mut self, fingerprint: &str) -> bool {
+        let before = self.devices.len();
+        self.devices.retain(|d| d.fingerprint != fingerprint);
+        self.devices.len() < before
+    }
+
+    /// The current list of paired devices.
+    pub fn devices(&self) -> &[PairedDevice] {
+        &self.devices
+    }
+}
+
 // ===========================================================================
 // Tests
 // ===========================================================================
@@ -484,5 +573,78 @@ mod tests {
             result.is_err(),
             "tampered ciphertext should fail to decrypt"
         );
+    }
+
+    // -----------------------------------------------------------------------
+    // PairedDeviceStore tests
+    // -----------------------------------------------------------------------
+
+    fn make_test_device(fingerprint: &str, name: &str) -> PairedDevice {
+        PairedDevice {
+            fingerprint: fingerprint.to_string(),
+            public_key_base64: "dGVzdA==".to_string(),
+            name: name.to_string(),
+            paired_at: 1700000000,
+        }
+    }
+
+    #[test]
+    fn paired_device_store_add_and_find() {
+        let dir = std::env::temp_dir().join("redmatrix_test_paired");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("paired.json");
+
+        let mut store = PairedDeviceStore::new(path.clone());
+        assert!(!store.is_paired("AAAA-BBBB-CCCC"));
+
+        store.add(make_test_device("AAAA-BBBB-CCCC", "Test iPad"));
+
+        assert!(store.is_paired("AAAA-BBBB-CCCC"));
+        assert!(!store.is_paired("XXXX-YYYY-ZZZZ"));
+
+        let found = store.find_by_fingerprint("AAAA-BBBB-CCCC").unwrap();
+        assert_eq!(found.name, "Test iPad");
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn paired_device_store_remove() {
+        let store_path = std::env::temp_dir()
+            .join("redmatrix_test_paired2")
+            .join("paired.json");
+        let mut store = PairedDeviceStore::new(store_path);
+
+        store.add(make_test_device("AAAA-BBBB-CCCC", "Test iPad"));
+
+        assert!(store.remove("AAAA-BBBB-CCCC"));
+        assert!(!store.is_paired("AAAA-BBBB-CCCC"));
+        assert!(!store.remove("AAAA-BBBB-CCCC")); // already removed
+    }
+
+    #[test]
+    fn paired_device_store_save_and_load() {
+        let dir = std::env::temp_dir().join("redmatrix_test_paired3");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("paired.json");
+
+        let mut store = PairedDeviceStore::new(path.clone());
+        store.add(make_test_device("AAAA-BBBB-CCCC", "Test iPad"));
+        store.save().unwrap();
+
+        let loaded = PairedDeviceStore::load(path).unwrap();
+        assert!(loaded.is_paired("AAAA-BBBB-CCCC"));
+        assert_eq!(loaded.devices().len(), 1);
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn paired_device_store_load_nonexistent_returns_empty() {
+        let path = std::env::temp_dir()
+            .join("redmatrix_nonexistent")
+            .join("nope.json");
+        let store = PairedDeviceStore::load(path).unwrap();
+        assert_eq!(store.devices().len(), 0);
     }
 }
