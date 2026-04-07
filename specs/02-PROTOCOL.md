@@ -178,9 +178,23 @@ The mux (routing) table has different layouts depending on sample rate. Three ta
 
 ## Key Source Files
 
-| File | What to study |
-|------|--------------|
-| `mixer_scarlett_gen2.c` | Everything — commands, data structures, device configs |
-| `scarlett2.h` (geoffreybennett/scarlett2) | ioctl definitions for firmware operations |
-| `scarlett2-ioctls.c` | Userspace ioctl communication example |
-| `scarlettmixer.py` (x42/scarlettmixer) | Gen 1 USB vendor requests (different protocol, reference only) |
+| File | Repo | What to study |
+|------|------|--------------|
+| `mixer_scarlett2.c` | [linux-fcp](https://github.com/geoffreybennett/linux-fcp) | Everything — commands, data structures, device configs |
+| `scarlett2.h` | [scarlett2](https://github.com/geoffreybennett/scarlett2) | ioctl definitions for firmware operations |
+| `scarlett2-ioctls.c` | [scarlett2](https://github.com/geoffreybennett/scarlett2) | Userspace ioctl communication example |
+| `alsa-scarlett-gui` | [alsa-scarlett-gui](https://github.com/geoffreybennett/alsa-scarlett-gui) | Gtk4 GUI, demo `.state` files for every device, simulation mode |
+| `fcp-support` | [fcp-support](https://github.com/geoffreybennett/fcp-support) | FCP protocol tools (Gen 4 large devices) |
+| `scarlett2-firmware` | [scarlett2-firmware](https://github.com/geoffreybennett/scarlett2-firmware) | Firmware binaries, version numbers |
+| `scarlettmixer.py` | x42/scarlettmixer | Gen 1 USB vendor requests (different protocol, reference only) |
+
+## Geoffrey Bennett's Repository Index
+
+All at https://github.com/geoffreybennett:
+
+- **linux-fcp** — kernel driver fork with latest Scarlett/Clarett/Vocaster support (our primary protocol reference)
+- **alsa-scarlett-gui** — Gtk4 control panel with demo state files for every supported device (our test fixture source and UI reference)
+- **scarlett2** — firmware management utility for Gen 2/3/4 and Clarett
+- **scarlett2-firmware** — firmware binaries for Scarlett2-protocol devices
+- **fcp-support** — Linux FCP (Focusrite Control Protocol) tools for Gen 4 large devices
+- **fcp-firmware** — firmware for FCP-protocol devices

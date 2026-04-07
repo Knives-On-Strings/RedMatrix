@@ -64,10 +64,14 @@ This project uses **Test-Driven Development**. The workflow is:
 | `specs/04-UX.md` | Building or modifying the React UI |
 | `specs/05-BACKLOG.md` | Looking for what to work on next |
 | `specs/06-OPEN-QUESTIONS.md` | Unresolved decisions and blockers |
+| `specs/07-WEBSOCKET-API.md` | WebSocket API for iPad remote control |
 
 When implementing protocol commands, **always cross-reference the Linux kernel driver source** — it is the authoritative reference. Do not guess at protocol details.
 
-**Key source:** `mixer_scarlett_gen2.c` in https://github.com/geoffreybennett/linux-fcp
+**Key sources (all by Geoffrey Bennett):**
+- `mixer_scarlett_gen2.c` in https://github.com/geoffreybennett/linux-fcp — kernel driver (primary protocol reference)
+- https://github.com/geoffreybennett/alsa-scarlett-gui — Gtk4 GUI + demo `.state` files for every device (test fixtures in `tests/fixtures/alsa-states/`)
+- https://github.com/geoffreybennett/scarlett2 — firmware management utility
 
 ## Licensing
 
