@@ -120,11 +120,37 @@ npm install
 
 # Run tests
 npm test                    # 4 frontend tests
-cd src-tauri && cargo test  # 139 Rust tests
+cd src-tauri && cargo test  # 154 Rust tests
 
-# Run the app (opens a window with mock device data)
+# Run the app
 cargo tauri dev
 ```
+
+## Mock Mode (No Hardware Required)
+
+RedMatrix runs in **mock mode** when no Scarlett device is connected. This lets you explore the full UI, test all controls, and develop against the WebSocket API without any audio hardware.
+
+### What works in mock mode
+
+- **All 15 supported devices** — switch between them with the dropdown in the header (amber "Mock" indicator)
+- **All mixer controls** — faders, mute, solo, bus masters update state in real time
+- **All routing** — patchbay and matrix clicks update the mock routing table
+- **All input controls** — PAD, AIR, 48V, INST toggles
+- **All settings** — sample rate, clock source, S/PDIF mode
+- **WebSocket server** — iPad clients can connect and receive mock device state
+- **Device adaptation** — switching to a Solo shows no mixer, switching to an 18i20 shows all 25 buses
+
+### What doesn't work in mock mode
+
+- **No real audio metering** — meter bars show placeholder values
+- **No hardware notifications** — knob turns and button presses on the physical device aren't reflected
+- **Commands don't reach hardware** — changes only affect the in-memory mock state
+
+### Using mock mode for iPad development
+
+The WebSocket server runs in mock mode too. Start the desktop app, then connect your iPad client to `ws://<your-ip>:18120/api`. The iPad will receive the full mock device state and can send commands that update it. This enables iPad UI development without a Scarlett device.
+
+Note: the server binds to `127.0.0.1` by default during development. To test with an iPad on your LAN, change the bind address in `src-tauri/src/server/mod.rs` to `"0.0.0.0"` temporarily. Be aware this opens the server to your network without authentication (pairing is not yet enforced in dev mode).
 
 ## Contributing
 
