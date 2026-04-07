@@ -15,6 +15,8 @@ pub struct UserConfig {
     pub theme: String,
     pub labels: Labels,
     pub stereo_pairs: Vec<StereoPairConfig>,
+    #[serde(default)]
+    pub input_stereo_pairs: Vec<InputStereoPairConfig>,
     pub bus_names: HashMap<String, String>,
 }
 
@@ -34,6 +36,16 @@ pub struct StereoPairConfig {
     pub right: u32,
     pub name: String,
     pub linked: bool,
+}
+
+/// An input stereo pair configuration.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct InputStereoPairConfig {
+    pub left: u32,
+    pub right: u32,
+    pub name: String,
+    pub linked: bool,
+    pub input_type: String, // "analogue", "spdif", "adat"
 }
 
 /// Get the config directory path: `~/knivesonstrings/redmatrix/`.
@@ -109,6 +121,7 @@ mod tests {
                 name: "Main Monitors".to_string(),
                 linked: true,
             }],
+            input_stereo_pairs: vec![],
             bus_names: HashMap::from([("0".to_string(), "Drums Bus".to_string())]),
         };
 

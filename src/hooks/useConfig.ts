@@ -21,6 +21,13 @@ export interface UserConfig {
     name: string;
     linked: boolean;
   }>;
+  input_stereo_pairs: Array<{
+    left: number;
+    right: number;
+    name: string;
+    linked: boolean;
+    input_type: string;  // "analogue", "spdif", "adat"
+  }>;
   bus_names: Record<string, string>;
 }
 
@@ -28,6 +35,7 @@ export const DEFAULT_CONFIG: UserConfig = {
   theme: "dark",
   labels: { inputs: {}, outputs: {}, pcm: {}, buses: {} },
   stereo_pairs: [],
+  input_stereo_pairs: [],
   bus_names: {},
 };
 

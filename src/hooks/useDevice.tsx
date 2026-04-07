@@ -24,6 +24,14 @@ export interface StereoPairConfig {
   linked: boolean;
 }
 
+export interface InputStereoPairConfig {
+  left: number;
+  right: number;
+  name: string;
+  linked: boolean;
+  input_type: string;
+}
+
 interface DeviceContextValue {
   state: DeviceState | null;
   loading: boolean;
@@ -34,6 +42,8 @@ interface DeviceContextValue {
   getLabel: (category: keyof ChannelLabels, key: string, defaultName: string) => string;
   stereoPairs: StereoPairConfig[];
   setStereoPairs: (pairs: StereoPairConfig[]) => void;
+  inputStereoPairs: InputStereoPairConfig[];
+  setInputStereoPairs: (pairs: InputStereoPairConfig[]) => void;
   theme: string;
   setTheme: (themeId: string) => void;
 }
@@ -58,6 +68,7 @@ export function DeviceProvider(props: DeviceProviderProps) {
     buses: {},
   });
   const [stereoPairs, setStereoPairsState] = useState<StereoPairConfig[]>([]);
+  const [inputStereoPairs, setInputStereoPairsState] = useState<InputStereoPairConfig[]>([]);
   const [theme, setThemeState] = useState<string>("dark");
 
   // Track the current device serial for config persistence
@@ -95,6 +106,9 @@ export function DeviceProvider(props: DeviceProviderProps) {
           }
           if (savedConfig.stereo_pairs && savedConfig.stereo_pairs.length > 0) {
             setStereoPairsState(savedConfig.stereo_pairs);
+          }
+          if (savedConfig.input_stereo_pairs && savedConfig.input_stereo_pairs.length > 0) {
+            setInputStereoPairsState(savedConfig.input_stereo_pairs);
           }
           if (savedConfig.theme) {
             setThemeState(savedConfig.theme);
@@ -167,6 +181,15 @@ export function DeviceProvider(props: DeviceProviderProps) {
     }
   }, [debouncedSave]);
 
+  const setInputStereoPairs = useCallback((pairs: InputStereoPairConfig[]) => {
+    setInputStereoPairsState(pairs);
+    const serial = serialRef.current;
+    if (serial) {
+      configRef.current = { ...configRef.current, input_stereo_pairs: pairs };
+      debouncedSave(serial, configRef.current);
+    }
+  }, [debouncedSave]);
+
   const setTheme = useCallback((themeId: string) => {
     const themeObj = THEMES[themeId];
     if (themeObj) {
@@ -181,7 +204,7 @@ export function DeviceProvider(props: DeviceProviderProps) {
   }, [debouncedSave]);
 
   return (
-    <DeviceContext.Provider value={{ state, loading, error, sendCommand, labels, setLabel, getLabel, stereoPairs, setStereoPairs, theme, setTheme }}>
+    <DeviceContext.Provider value={{ state, loading, error, sendCommand, labels, setLabel, getLabel, stereoPairs, setStereoPairs, inputStereoPairs, setInputStereoPairs, theme, setTheme }}>
       {children}
     </DeviceContext.Provider>
   );
