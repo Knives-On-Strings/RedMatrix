@@ -65,6 +65,7 @@ This project uses **Test-Driven Development**. The workflow is:
 | `specs/05-BACKLOG.md` | Looking for what to work on next |
 | `specs/06-OPEN-QUESTIONS.md` | Unresolved decisions and blockers |
 | `specs/07-WEBSOCKET-API.md` | WebSocket API for iPad remote control |
+| `specs/08-CLIENT-DEVELOPER-GUIDE.md` | How to write a third-party client (quick start, full message catalog, encryption guide) |
 
 When implementing protocol commands, **always cross-reference the Linux kernel driver source** — it is the authoritative reference. Do not guess at protocol details.
 

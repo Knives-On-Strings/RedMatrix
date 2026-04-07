@@ -99,6 +99,7 @@ The `specs/` folder contains the complete project specification:
 | [05-BACKLOG](specs/05-BACKLOG.md) | Phased project plan |
 | [06-OPEN-QUESTIONS](specs/06-OPEN-QUESTIONS.md) | Unresolved decisions and blockers |
 | [07-WEBSOCKET-API](specs/07-WEBSOCKET-API.md) | WebSocket API reference for remote control |
+| [08-CLIENT-DEVELOPER-GUIDE](specs/08-CLIENT-DEVELOPER-GUIDE.md) | How to write your own RedMatrix client |
 
 ## Development
 

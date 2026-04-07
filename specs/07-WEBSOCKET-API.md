@@ -4,7 +4,7 @@
 
 The RedMatrix server exposes a WebSocket API on port 18120 for remote control. The desktop React client uses Tauri IPC (not this API). The iPad app and any future remote clients connect via this WebSocket.
 
-All remote connections are encrypted and authenticated via ECDH keypair exchange. Localhost connections (for development/testing) can optionally bypass encryption.
+All connections are encrypted and authenticated via ECDH keypair exchange. There are no exceptions — localhost connections require the same handshake as remote ones.
 
 ## Connection
 
