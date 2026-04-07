@@ -52,7 +52,17 @@ vi.mock("@tauri-apps/api/core", () => ({
         theme: "dark",
         labels: { inputs: {}, outputs: {}, pcm: {}, buses: {} },
         stereo_pairs: [],
+        input_stereo_pairs: [],
         bus_names: {},
+      });
+    }
+    if (cmd === "get_server_info") {
+      return Promise.resolve({
+        fingerprint: "A3F2-9B17-D4C8",
+        port: 18120,
+        ips: ["192.168.1.100"],
+        paired_count: 0,
+        connected_count: 0,
       });
     }
     return Promise.resolve(null);

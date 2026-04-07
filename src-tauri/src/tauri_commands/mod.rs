@@ -97,6 +97,35 @@ pub fn approve_pairing(fingerprint: String, approved: bool) -> Result<(), String
     Ok(())
 }
 
+/// Get server connection info for remote pairing (fingerprint, port, IPs).
+#[tauri::command]
+pub fn get_server_info() -> serde_json::Value {
+    // Generate a mock fingerprint for now — real one comes from ServerKeypair
+    // when the WebSocket server is running.
+    let fingerprint = "A3F2-9B17-D4C8"; // placeholder
+
+    // Get local IP addresses
+    let mut ips: Vec<String> = Vec::new();
+    if let Ok(addrs) = std::net::UdpSocket::bind("0.0.0.0:0") {
+        if addrs.connect("8.8.8.8:80").is_ok() {
+            if let Ok(local) = addrs.local_addr() {
+                ips.push(local.ip().to_string());
+            }
+        }
+    }
+    if ips.is_empty() {
+        ips.push("127.0.0.1".to_string());
+    }
+
+    serde_json::json!({
+        "fingerprint": fingerprint,
+        "port": 18120,
+        "ips": ips,
+        "paired_count": 0,
+        "connected_count": 0,
+    })
+}
+
 /// Legacy greeting command (smoke test for IPC).
 #[tauri::command]
 pub fn greet(name: &str) -> String {

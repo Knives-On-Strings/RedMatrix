@@ -1,6 +1,9 @@
+import { useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { useDevice } from "../../hooks/useDevice";
 import { THEMES, type Theme } from "../../themes";
 import type { ClockSource } from "../../types";
+import QrCode from "../QrCode";
 
 function SettingRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -191,19 +194,79 @@ export default function Settings() {
             </SettingRow>
           </SettingGroup>
 
-          <SettingGroup title="Remote Control">
-            <SettingRow label="WebSocket Server">
-              <StatusBadge ok={true} label="Running on :18120" />
-            </SettingRow>
-            <SettingRow label="Paired Devices">
-              <span className="text-sm text-neutral-400">0 devices</span>
-            </SettingRow>
-            <SettingRow label="Connected Clients">
-              <span className="text-sm text-neutral-400">0</span>
-            </SettingRow>
-          </SettingGroup>
+          <RemoteControlSection />
         </div>
       </div>
     </div>
+  );
+}
+
+function RemoteControlSection() {
+  const [serverInfo, setServerInfo] = useState<{
+    fingerprint: string;
+    port: number;
+    ips: string[];
+    paired_count: number;
+    connected_count: number;
+  } | null>(null);
+
+  useEffect(() => {
+    invoke<{
+      fingerprint: string;
+      port: number;
+      ips: string[];
+      paired_count: number;
+      connected_count: number;
+    }>("get_server_info")
+      .then(setServerInfo)
+      .catch(() => {});
+  }, []);
+
+  if (!serverInfo) {
+    return (
+      <SettingGroup title="Remote Control">
+        <div className="py-3 text-sm text-neutral-500">Loading server info...</div>
+      </SettingGroup>
+    );
+  }
+
+  const connectionUrl = `redmatrix://${serverInfo.ips[0] ?? "127.0.0.1"}:${serverInfo.port}?fp=${serverInfo.fingerprint}`;
+
+  return (
+    <SettingGroup title="Remote Control">
+      {/* QR code for iPad pairing */}
+      <div className="flex items-start gap-4 py-3">
+        <QrCode data={connectionUrl} size={140} />
+        <div className="flex-1 space-y-2">
+          <p className="text-xs text-neutral-400">
+            Scan this QR code with RedMatrix Remote on your iPad to pair.
+          </p>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-neutral-500 w-16">Fingerprint</span>
+              <span className="text-xs text-neutral-300 font-mono bg-neutral-900 px-2 py-0.5 rounded select-all">
+                {serverInfo.fingerprint}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-neutral-500 w-16">Address</span>
+              <span className="text-xs text-neutral-300 font-mono">
+                {serverInfo.ips.map((ip) => `${ip}:${serverInfo.port}`).join(", ")}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <SettingRow label="WebSocket Server">
+        <StatusBadge ok={true} label={`Running on :${serverInfo.port}`} />
+      </SettingRow>
+      <SettingRow label="Paired Devices">
+        <span className="text-sm text-neutral-400">{serverInfo.paired_count} device{serverInfo.paired_count !== 1 ? "s" : ""}</span>
+      </SettingRow>
+      <SettingRow label="Connected Clients">
+        <span className="text-sm text-neutral-400">{serverInfo.connected_count}</span>
+      </SettingRow>
+    </SettingGroup>
   );
 }

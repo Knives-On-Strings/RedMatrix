@@ -32,7 +32,8 @@
       "Bash(gh api:*)",
       "Bash(find /s/Dev/audio/redmatrix/src/components/tabs -name \"*.tsx\" -exec wc -l {})",
       "Bash(grep -n \"TODO\\\\|FIXME\\\\|XXX\\\\|HACK\" /s/Dev/audio/redmatrix/src/components/tabs/*.tsx)",
-      "Bash(npx vitest:*)"
+      "Bash(npx vitest:*)",
+      "Bash(npm install:*)"
     ]
   }
 }
