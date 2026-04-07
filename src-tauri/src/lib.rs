@@ -1,3 +1,4 @@
+pub mod config;
 pub mod protocol;
 pub mod server;
 pub mod state;
@@ -24,6 +25,8 @@ pub fn run() {
             tauri_commands::send_command,
             tauri_commands::switch_mock_device,
             tauri_commands::list_mock_devices,
+            tauri_commands::load_user_config,
+            tauri_commands::save_user_config,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

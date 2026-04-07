@@ -13,6 +13,8 @@ import { createContext, useContext, useEffect, useState, useCallback, useRef, ty
 import type { DeviceState, ClientMessage, ChannelLabels } from "../types";
 import type { Transport } from "../transport";
 import { TauriTransport } from "../transport";
+import { loadConfig, saveConfig, DEFAULT_CONFIG } from "./useConfig";
+import type { UserConfig } from "./useConfig";
 
 interface DeviceContextValue {
   state: DeviceState | null;
@@ -44,6 +46,20 @@ export function DeviceProvider(props: DeviceProviderProps) {
     buses: {},
   });
 
+  // Track the current device serial for config persistence
+  const serialRef = useRef<string | null>(null);
+  const configRef = useRef<UserConfig>(DEFAULT_CONFIG);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const debouncedSave = useCallback((serial: string, config: UserConfig) => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      saveConfig(serial, config).catch((e) =>
+        console.error("Failed to save config:", e),
+      );
+    }, 500);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -54,6 +70,16 @@ export function DeviceProvider(props: DeviceProviderProps) {
         const deviceState = await transport.getState();
         if (!cancelled) {
           setState(deviceState);
+
+          // Load saved config for this device
+          const serial = deviceState.device.serial;
+          serialRef.current = serial;
+          const savedConfig = await loadConfig(serial);
+          configRef.current = savedConfig;
+          if (savedConfig.labels) {
+            setLabels(savedConfig.labels);
+          }
+
           setLoading(false);
         }
       } catch (e) {
@@ -74,8 +100,10 @@ export function DeviceProvider(props: DeviceProviderProps) {
     return () => {
       cancelled = true;
       unsub();
+      // Flush any pending save
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
-  }, []);
+  }, [debouncedSave]);
 
   const sendCommand = useCallback(async (msg: ClientMessage) => {
     try {
@@ -86,12 +114,20 @@ export function DeviceProvider(props: DeviceProviderProps) {
   }, []);
 
   const setLabel = useCallback((category: keyof ChannelLabels, key: string, value: string) => {
-    setLabels((prev) => ({
-      ...prev,
-      [category]: { ...prev[category], [key]: value },
-    }));
-    // TODO: persist to config file
-  }, []);
+    setLabels((prev) => {
+      const updated = {
+        ...prev,
+        [category]: { ...prev[category], [key]: value },
+      };
+      // Persist to config file (debounced)
+      const serial = serialRef.current;
+      if (serial) {
+        configRef.current = { ...configRef.current, labels: updated };
+        debouncedSave(serial, configRef.current);
+      }
+      return updated;
+    });
+  }, [debouncedSave]);
 
   const getLabel = useCallback(
     (category: keyof ChannelLabels, key: string, defaultName: string): string => {

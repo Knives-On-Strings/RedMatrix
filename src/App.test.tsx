@@ -42,6 +42,14 @@ vi.mock("@tauri-apps/api/core", () => ({
         routing: Array.from({ length: 20 }, (_, i) => ({ type: "pcm", index: i })),
       });
     }
+    if (cmd === "load_user_config") {
+      return Promise.resolve({
+        theme: "dark",
+        labels: { inputs: {}, outputs: {}, pcm: {}, buses: {} },
+        stereo_pairs: [],
+        bus_names: {},
+      });
+    }
     return Promise.resolve(null);
   }),
 }));

@@ -8,6 +8,7 @@ use tokio::sync::RwLock;
 
 use tauri::State;
 
+use crate::config;
 use crate::server::messages::ClientMessage;
 use crate::server::mock_devices;
 use crate::server::mock_handler;
@@ -64,6 +65,21 @@ pub fn list_mock_devices() -> Vec<(u16, String)> {
         .into_iter()
         .map(|(pid, name)| (pid, name.to_string()))
         .collect()
+}
+
+/// Load user config for a device by serial number.
+/// Returns default config if no saved config exists.
+#[tauri::command]
+pub fn load_user_config(serial: String) -> config::UserConfig {
+    let path = config::device_config_path(&serial);
+    config::load_config(&path)
+}
+
+/// Save user config for a device by serial number.
+#[tauri::command]
+pub fn save_user_config(serial: String, config_data: config::UserConfig) -> Result<(), String> {
+    let path = config::device_config_path(&serial);
+    config::save_config(&path, &config_data)
 }
 
 /// Legacy greeting command (smoke test for IPC).
