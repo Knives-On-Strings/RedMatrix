@@ -153,11 +153,13 @@ pub async fn start_server(config: ServerConfig) -> Result<ServerHandle, ServerEr
         }
     };
 
-    // 9. Spawn mock meter task (generates fake meter data at ~30 Hz)
+    // 9. Spawn mock meter task (generates fake meter data at 20 Hz)
+    // Capped at 20Hz to reduce USB/CPU overhead when running with real hardware.
+    // Client-side CSS easing smooths the visual to 60fps.
     let meter_broadcast = broadcast_handle.clone();
     let (meter_stop_tx, mut meter_stop_rx) = tokio::sync::watch::channel(false);
     tokio::spawn(async move {
-        let mut interval = tokio::time::interval(std::time::Duration::from_millis(33));
+        let mut interval = tokio::time::interval(std::time::Duration::from_millis(50));
         loop {
             tokio::select! {
                 _ = interval.tick() => {
