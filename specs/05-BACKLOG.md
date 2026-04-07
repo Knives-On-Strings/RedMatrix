@@ -65,11 +65,13 @@ TDD: every command and parser gets a test BEFORE implementation.
 
 ### Mixer tab
 - [ ] Collapsible groups: Analogue, S/PDIF, ADAT, DAW
-- [ ] Per-channel: fader + VU meter with peak hold, solo (software), mute
+- [ ] Per-channel: fader + VU meter with peak hold, solo (server-side), mute
 - [ ] Analogue channels: INST (1-2 only), PAD (1-8), AIR (1-8)
 - [ ] Phantom power controls (48V 1-4, 48V 5-8)
 - [ ] DAW group collapsed by default
 - [ ] Only show groups that exist at current sample rate
+- [ ] **Input stereo linking:** Link button between adjacent odd/even analogue inputs (1-2, 3-4, 5-6, 7-8). Linked pairs share a single fader, pan hard L/R in the matrix, and share mute/solo state. Essential for stereo synths/sources.
+- [ ] **Meter ballistics:** Smoothed meter rendering with gravity/decay easing and peak hold line. Raw meter values → professional-looking VU behavior. Don't paint raw 0.0-1.0 floats directly.
 
 ### Routing tab
 - [ ] Full patchbay: all source types × all destination types
@@ -84,7 +86,7 @@ TDD: every command and parser gets a test BEFORE implementation.
 - [ ] Presets: Direct, Preamp, Stereo Out, Clear
 
 ### Settings tab
-- [ ] Sample rate selector
+- [ ] Sample rate selector (**Warning/read-only if device is locked by ASIO driver** — on Windows with driver coexistence, the ASIO driver may hold a sample rate lock. Detect and warn rather than cause a driver panic.)
 - [ ] Clock source selector
 - [ ] Sync status indicator
 - [ ] Digital I/O mode selector (3 modes with descriptions)
@@ -99,6 +101,7 @@ TDD: every command and parser gets a test BEFORE implementation.
 - [ ] DIM / MUTE / TALK / MAIN-ALT buttons
 - [ ] Connection + sync status
 - [ ] Solo indicator with Clear
+- [ ] **Global keyboard shortcuts:** TALK, DIM, MUTE, MAIN/ALT as OS-level global shortcuts via Tauri `GlobalShortcut` API. Work even when DAW is focused. Configurable in Settings.
 
 ### Notification handling
 - [ ] Reflect hardware changes (knob turns, button presses) in real time
