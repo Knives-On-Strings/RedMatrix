@@ -28,6 +28,22 @@ export interface DeviceState {
   routing: RouteEntry[];
 }
 
+/**
+ * User-defined custom labels for channels.
+ * Stored client-side, keyed by device serial number.
+ * Not part of the WebSocket API — purely local UI state.
+ */
+export interface ChannelLabels {
+  /** Custom names for inputs, keyed by "{type}_{index}" e.g. "analogue_0" */
+  inputs: Record<string, string>;
+  /** Custom names for outputs, keyed by "{type}_{index}" e.g. "analogue_0" */
+  outputs: Record<string, string>;
+  /** Custom names for PCM channels, keyed by "pcm_in_{index}" or "pcm_out_{index}" */
+  pcm: Record<string, string>;
+  /** Custom names for mixer buses, keyed by bus index "0", "1", etc. */
+  buses: Record<string, string>;
+}
+
 export interface DeviceInfo {
   name: string;
   pid: string;
