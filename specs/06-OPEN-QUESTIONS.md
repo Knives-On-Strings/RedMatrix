@@ -96,7 +96,19 @@ USB interrupt notifications can occasionally be dropped. Consider a slow backgro
 ### 15. CLA for open-source contributions
 The React code is dual-licensed (GPL-3.0 public, proprietary for iOS). If we accept external PRs to the React code, contributors' GPL code cannot legally be used in the proprietary iOS app without a Contributor License Agreement (CLA). Set up a CLA before accepting any PRs.
 
-### 16. Word clock configuration
+### 16. Config file paths — DECIDED
+
+All configuration files are JSON, stored in:
+- **Windows:** `%USERPROFILE%\knivesonstrings\redmatrix\`
+- **macOS:** `~/knivesonstrings/redmatrix/`
+
+Files:
+- `server_keys.json` — ECDH server keypair
+- `paired_devices.json` — paired iPad client public keys
+- `channel_labels_{serial}.json` — user-defined channel names per device
+- `config.json` — server settings (port, name, max_saves_per_hour, etc.)
+
+### 17. Word clock configuration
 The 18i20 has a BNC word clock output. Is word clock source selection the same as the clock source setting in the protocol (Internal/S/PDIF/ADAT), or is it a separate control? The manual implies they're the same. Verify in the kernel source or during Phase 0.
 
 ### 17. Focusrite Control installer side effects

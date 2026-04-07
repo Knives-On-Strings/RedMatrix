@@ -57,9 +57,9 @@ iPad                                    Server
 
 ### Key Management
 
-- **Server keypair:** Generated on first run. Stored in `%APPDATA%/RedMatrix/server_keys.json` (Windows) or `~/Library/Application Support/RedMatrix/server_keys.json` (macOS). The public key fingerprint is displayed in the Settings tab as a QR code and a human-readable string (e.g. `A3F2-9B17-D4C8`).
+- **Server keypair:** Generated on first run. Stored in `%USERPROFILE%/knivesonstrings/redmatrix/server_keys.json` (Windows) or `~/knivesonstrings/redmatrix/server_keys.json` (macOS). The public key fingerprint is displayed in the Settings tab as a QR code and a human-readable string (e.g. `A3F2-9B17-D4C8`).
 - **Client keypair:** Generated on first launch of the iPad app. Private key stored in iOS Keychain. Public key sent during handshake.
-- **Paired devices list:** Stored server-side. Maps client public key fingerprints to device names and pairing timestamps. Manageable from Settings tab.
+- **Paired devices list:** Stored server-side in `%USERPROFILE%/knivesonstrings/redmatrix/paired_devices.json`. Maps client public key fingerprints to device names and pairing timestamps. Manageable from Settings tab.
 
 ### Handshake Messages
 
