@@ -108,7 +108,12 @@ Files:
 - `channel_labels_{serial}.json` — user-defined channel names per device
 - `config.json` — server settings (port, name, max_saves_per_hour, etc.)
 
-### 17. Word clock configuration
+### 17. Mixer input channel count and mapping
+The 18i20 Gen 3 DSP mixer has `port_counts.mix = { inputs: 12, outputs: 25 }`. The Mixer tab currently shows all hardware inputs (9 analogue + S/PDIF + ADAT = 19 channels) but the hardware mixer only has **12 input slots**. Which 12 inputs feed those slots is determined by the mux routing to the mixer input destinations.
+
+The Mixer tab needs to show exactly 12 channel strips, labeled by what the mux has routed to each mixer input. This requires reading the mux state to determine the current mixer input assignments. Low priority for the UI draft phase — the correct channel count matters for the real implementation.
+
+### 18. Word clock configuration
 The 18i20 has a BNC word clock output. Is word clock source selection the same as the clock source setting in the protocol (Internal/S/PDIF/ADAT), or is it a separate control? The manual implies they're the same. Verify in the kernel source or during Phase 0.
 
 ### 17. Focusrite Control installer side effects

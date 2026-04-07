@@ -15,7 +15,16 @@
       "Bash(npm test:*)",
       "Bash(cargo test:*)",
       "Bash(npx vite:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(cargo clippy:*)",
+      "WebFetch(domain:stuff.mit.edu)",
+      "WebFetch(domain:git.nasm.us)",
+      "WebFetch(domain:android.googlesource.com)",
+      "Bash(pip3 show:*)",
+      "Bash(python scripts/01_enumerate.py)",
+      "Bash(python scripts/02_claim_test.py)",
+      "Bash(python scripts/03_read_state.py)",
+      "Bash(npx tsc:*)"
     ]
   }
 }
