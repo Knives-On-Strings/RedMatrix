@@ -21,7 +21,9 @@ describe("App", () => {
 
   it("shows Overview tab content by default", () => {
     render(<App />);
-    expect(screen.getByText("Front panel LEDs, input meters, output levels, status widgets")).toBeDefined();
+    // Overview now shows real content with mock device state
+    expect(screen.getByText("Inputs")).toBeDefined();
+    expect(screen.getByText("Outputs")).toBeDefined();
   });
 
   it("switches tabs when clicked", () => {
