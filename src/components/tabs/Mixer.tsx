@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { InputState } from "../../types";
 import { useDevice } from "../../hooks/useDevice";
+import { useMeters } from "../../hooks/useMeterStore";
 import { dbToNormalized, normalizedToDb, formatDb, busLabel as busLabelFn } from "../../constants";
 import MeterBar from "../MeterBar";
 
@@ -195,7 +196,8 @@ function BusButton({ isActive, label, customName, onClick, onRename }: {
 }
 
 export default function Mixer() {
-  const { state, loading, sendCommand, getLabel, setLabel, meters } = useDevice();
+  const { state, loading, sendCommand, getLabel, setLabel } = useDevice();
+  const meters = useMeters();
   const [activeBus, setActiveBus] = useState(0);
   const [busMasters, setBusMasters] = useState<Record<number, number>>({});
   const [subAssignments, setSubAssignments] = useState<[number, number, number, number]>([0, 1, 2, 3]);
@@ -225,9 +227,11 @@ export default function Mixer() {
 
   const handleBusMasterChange = (busIndex: number, db: number) => {
     setBusMasters((prev) => ({ ...prev, [busIndex]: db }));
-    // TODO: Bus master is a UI-only dB offset for now. Proper implementation
-    // requires the backend state manager to apply the offset to all active
-    // crosspoint gains in the bus before sending individual SET_MIX commands.
+    // Apply bus master as absolute gain for all channels in this bus.
+    // This sets every crosspoint in the bus to the master level.
+    // In a real VCA implementation, we'd store individual offsets and
+    // multiply, but for now this gives immediate audible feedback.
+    sendCommand({ type: "set_bus_gains", payload: { mix: busIndex, gain_db: db } });
   };
 
   const handleSubAssignment = (subIndex: number, busIndex: number) => {
@@ -239,10 +243,16 @@ export default function Mixer() {
   };
 
   const handleMasterChange = (db: number) => {
+    const prevDb = masterDb;
     setMasterDb(db);
-    // TODO: Master fader is a UI-only global dB offset for now. Proper
-    // implementation requires backend support to apply a global offset
-    // across all bus masters before sending per-channel SET_MIX commands.
+    // Apply master offset delta to all active sub faders
+    const delta = db - prevDb;
+    for (const assignedBus of subAssignments) {
+      const currentBusMaster = busMasters[assignedBus] ?? 0;
+      const newBusMaster = Math.max(-80, Math.min(6, currentBusMaster + delta));
+      setBusMasters((prev) => ({ ...prev, [assignedBus]: newBusMaster }));
+      sendCommand({ type: "set_bus_gains", payload: { mix: assignedBus, gain_db: newBusMaster } });
+    }
   };
 
   const busGains = state.mixer.gains[activeBus] ?? [];

@@ -1,5 +1,5 @@
 import type { DeviceState, OutputState } from "../../../types";
-import { useDevice } from "../../../hooks/useDevice";
+import { useMeters } from "../../../hooks/useMeterStore";
 
 interface OutputLevelsProps {
   state: DeviceState;
@@ -37,7 +37,7 @@ function OutputRow({ output, isInactive, level }: { output: OutputState; isInact
 }
 
 export default function OutputLevels({ state }: OutputLevelsProps) {
-  const { meters } = useDevice();
+  const meters = useMeters();
   const isAlt = state.monitor.speaker_switching === "alt";
 
   // Output meters start after input meters in the meter array

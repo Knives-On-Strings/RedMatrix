@@ -17,6 +17,7 @@ import { loadConfig, saveConfig, DEFAULT_CONFIG } from "./useConfig";
 import type { UserConfig } from "./useConfig";
 import { THEMES, applyTheme } from "../themes";
 import { showToast } from "../components/Toast";
+import { pushMeterData } from "./useMeterStore";
 
 export interface StereoPairConfig {
   left: number;
@@ -47,7 +48,6 @@ interface DeviceContextValue {
   setInputStereoPairs: (pairs: InputStereoPairConfig[]) => void;
   theme: string;
   setTheme: (themeId: string) => void;
-  meters: Float32Array;
 }
 
 interface DeviceProviderProps {
@@ -72,7 +72,6 @@ export function DeviceProvider(props: DeviceProviderProps) {
   const [stereoPairs, setStereoPairsState] = useState<StereoPairConfig[]>([]);
   const [inputStereoPairs, setInputStereoPairsState] = useState<InputStereoPairConfig[]>([]);
   const [theme, setThemeState] = useState<string>("dark");
-  const [meters, setMeters] = useState<Float32Array>(new Float32Array(0));
 
   // Track the current device serial for config persistence
   const serialRef = useRef<string | null>(null);
@@ -136,9 +135,10 @@ export function DeviceProvider(props: DeviceProviderProps) {
       setState(newState);
     });
 
-    // Subscribe to meter data
+    // Subscribe to meter data — pushed to external store, NOT React state.
+    // This avoids re-rendering the entire context tree at 20Hz.
     const unsubMeters = transport.onMeters((meterData) => {
-      setMeters(meterData);
+      pushMeterData(meterData);
     });
 
     // Subscribe to server messages (disconnect, reconnect, errors)
@@ -232,7 +232,7 @@ export function DeviceProvider(props: DeviceProviderProps) {
   }, [debouncedSave]);
 
   return (
-    <DeviceContext.Provider value={{ state, loading, error, sendCommand, labels, setLabel, getLabel, stereoPairs, setStereoPairs, inputStereoPairs, setInputStereoPairs, theme, setTheme, meters }}>
+    <DeviceContext.Provider value={{ state, loading, error, sendCommand, labels, setLabel, getLabel, stereoPairs, setStereoPairs, inputStereoPairs, setInputStereoPairs, theme, setTheme }}>
       {children}
     </DeviceContext.Provider>
   );
