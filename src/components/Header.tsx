@@ -21,15 +21,10 @@ export default function Header() {
         <HeaderButton label="MUTE" />
       </div>
 
-      {/* Right: master volume + remote */}
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-neutral-500">VOL</span>
-          <div className="w-24 h-1.5 bg-neutral-700 rounded-full">
-            <div className="w-3/4 h-full bg-neutral-400 rounded-full" />
-          </div>
-          <span className="text-xs text-neutral-400 w-10 text-right">0 dB</span>
-        </div>
+      {/* Right: volume readout */}
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-neutral-500">MON</span>
+        <span className="text-sm text-neutral-300 font-mono">0 dB</span>
       </div>
     </header>
   );
