@@ -9,6 +9,8 @@ pub mod crypto;
 pub mod listener;
 pub mod mdns;
 pub mod messages;
+pub mod mock_devices;
+pub mod mock_handler;
 pub mod session;
 pub mod state;
 
