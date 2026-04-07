@@ -21,8 +21,10 @@ export default function Header({ onSettingsClick, onAboutClick, onDeviceSwitch }
 
   return (
     <header className="flex items-center justify-between px-4 py-2 bg-neutral-800 border-b border-neutral-700">
-      {/* Left: connection + device selector */}
+      {/* Left: logo + connection + device selector */}
       <div className="flex items-center gap-3">
+        <span className="text-sm font-bold tracking-widest text-red-400 uppercase">RedMatrix</span>
+        <div className="w-px h-4 bg-neutral-700" />
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-amber-500" />
           <span className="text-[10px] text-amber-400 font-bold uppercase">Mock</span>
