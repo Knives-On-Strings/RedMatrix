@@ -6,7 +6,7 @@
 
 **Architecture:** Tokio async tasks: listener accepts connections, per-client session tasks handle handshake + encrypted message loop, state manager processes commands and broadcasts updates via tokio channels. Mock device state for testing without USB.
 
-**Tech Stack:** Rust, tokio, tokio-tungstenite, ring (ECDH + AES-256-GCM + HKDF), serde/serde_json, mdns-sd.
+**Tech Stack:** Rust, tokio, tokio-tungstenite, p256 + hkdf + sha2 + aes-gcm (RustCrypto family, replacing ring), serde/serde_json, mdns-sd.
 
 **Spec:** `specs/07-WEBSOCKET-API.md` (API contract), `specs/2026-04-07-websocket-server-design.md` (implementation design)
 
@@ -93,6 +93,21 @@
 
 **Goal:** ECDH P-256 keypair generation, HKDF key derivation, AES-256-GCM per-frame encrypt/decrypt with separate keys per direction.
 
+**Crates:** Use the RustCrypto family (NOT `ring` — it doesn't support persistent ECDH keys):
+- `p256` — ECDH key agreement and keypair generation. Supports serializing/deserializing private keys via `SecretKey::to_bytes()` / `from_bytes()`, which `ring` intentionally prevents.
+- `hkdf` + `sha2` — HKDF-SHA256 key derivation
+- `aes-gcm` — AES-256-GCM authenticated encryption
+- `rand` — secure random for key generation (`OsRng`)
+
+Update `Cargo.toml`: replace `ring = "0.17"` with:
+```toml
+p256 = { version = "0.13", features = ["ecdh"] }
+hkdf = "0.12"
+sha2 = "0.10"
+aes-gcm = "0.10"
+rand = "0.8"
+```
+
 **Files:** Create `src-tauri/src/server/crypto.rs`
 
 **Types to implement:**
@@ -101,11 +116,11 @@
 - `CryptoError` enum — KeyGenerationFailed, DerivationFailed, EncryptionFailed, DecryptionFailed, InvalidFrameCounter
 
 **Functions:**
-- `ServerKeypair::generate() -> Result<Self>` — new P-256 keypair
-- `ServerKeypair::load(path) -> Result<Self>` — load from JSON file
-- `ServerKeypair::save(path) -> Result<()>` — persist to JSON file
-- `ServerKeypair::fingerprint(&self) -> String` — human-readable fingerprint (e.g., "A3F2-9B17-D4C8")
-- `SessionCrypto::derive(server_private, client_public) -> Result<Self>` — ECDH + HKDF
+- `ServerKeypair::generate() -> Result<Self>` — new P-256 keypair via `p256::SecretKey::random(&mut OsRng)`
+- `ServerKeypair::load(path) -> Result<Self>` — load private key bytes from JSON file, reconstruct via `SecretKey::from_bytes()`
+- `ServerKeypair::save(path) -> Result<()>` — persist `SecretKey::to_bytes()` as base64 in JSON
+- `ServerKeypair::fingerprint(&self) -> String` — SHA-256 of public key bytes, formatted as "XXXX-XXXX-XXXX"
+- `SessionCrypto::derive(server_private: &SecretKey, client_public: &PublicKey) -> Result<Self>` — ECDH via `p256::ecdh::diffie_hellman()`, then HKDF
 - `SessionCrypto::encrypt_server_frame(&mut self, plaintext: &[u8]) -> Vec<u8>` — encrypt + prepend counter + append tag
 - `SessionCrypto::decrypt_client_frame(&mut self, frame: &[u8]) -> Result<Vec<u8>>` — verify counter + decrypt
 
@@ -118,20 +133,20 @@
 **Nonce construction:**
 - 12-byte nonce = base_iv with last 8 bytes XORed with frame_counter (LE u64)
 
-**Important ring crate note:** `ring::agreement::EphemeralPrivateKey` is single-use. For a persistent server key, we need to store the raw key bytes and use `agreement::UnparsedPublicKey` for the peer. Check if `ring` supports static ECDH keys, or use `p256` crate instead. The subagent should research this and pick the right crate.
-
 **Tests:**
 - Generate keypair, fingerprint is 14 chars (XXXX-XXXX-XXXX format)
+- Save and reload keypair, public key matches
 - Derive session crypto from two keypairs
 - Encrypt then decrypt round-trip
 - Server and client directions use different keys (encrypt with server key, cannot decrypt with server key — must use client key)
 - Frame counter increments, same plaintext produces different ciphertext
 - Tampered ciphertext fails decryption
 
+- [ ] Update Cargo.toml: replace ring with p256, hkdf, sha2, aes-gcm, rand
 - [ ] Implement ServerKeypair (generate, load, save, fingerprint)
 - [ ] Implement SessionCrypto (derive, encrypt, decrypt)
 - [ ] Write tests
-- [ ] Commit: `feat: add ECDH + AES-256-GCM crypto module`
+- [ ] Commit: `feat: add ECDH + AES-256-GCM crypto module (RustCrypto)`
 
 ---
 
@@ -165,15 +180,23 @@
 
 **Session lifecycle:**
 1. Send `ServerHello` (plaintext)
-2. Receive `ClientHello` (plaintext)
+2. Receive `ClientHello` (plaintext) — **with 30-second timeout**
 3. Check if client is paired → send `AuthResult`
-4. If pairing_requested: wait for approval (via a oneshot channel from the Tauri UI)
+4. If pairing_requested: wait for approval (via a oneshot channel from the Tauri UI) — **with 60-second timeout**
 5. On auth ok: derive SessionCrypto
 6. Send encrypted `DeviceState`
 7. Enter message loop:
    - Read: receive encrypted frame → decrypt → parse ClientMessage → send to command channel
    - Write: receive from broadcast channel → serialize → encrypt → send
 8. On disconnect: clean up
+
+**Timeout protection against zombie connections:**
+- All handshake steps are wrapped in `tokio::time::timeout`
+- `ClientHello` must arrive within 30 seconds of `ServerHello` being sent
+- Pairing approval must complete within 60 seconds
+- If any timeout fires: log the event, close the TCP stream, kill the session task
+- This prevents attackers or buggy clients from exhausting file descriptors by opening idle connections
+- Additionally, the listener should enforce a max concurrent connections limit (e.g., 16) to bound resource usage
 
 **Dependencies:** `crypto::SessionCrypto`, `messages::*`, `broadcast` channels, `state::DeviceState`
 
@@ -182,11 +205,13 @@
 - Handshake completes, client receives device_state
 - Client sends a command, receives state_update
 - Invalid client key gets rejected
+- Slow client that doesn't send ClientHello gets disconnected after timeout
+- Max connections limit enforced (17th connection rejected while 16 are active)
 
-- [ ] Implement session handshake
+- [ ] Implement session handshake with timeouts
 - [ ] Implement encrypted message loop
-- [ ] Write integration tests
-- [ ] Commit: `feat: add per-client WebSocket session handler`
+- [ ] Write integration tests including timeout and connection limit tests
+- [ ] Commit: `feat: add per-client WebSocket session handler with timeout protection`
 
 ---
 

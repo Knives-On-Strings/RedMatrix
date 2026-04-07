@@ -177,18 +177,17 @@ Uses `#[serde(tag = "type")]` for the `{ "type": "...", ... }` wire format.
 
 ```rust
 pub struct ServerKeypair {
-    // ring::agreement::EphemeralPrivateKey is single-use.
-    // For persistent server keys, store the raw private key bytes
-    // and reconstruct via agreement::agree_ephemeral per session.
-    // Alternatively, use the x25519-dalek crate for reusable static keys.
-    private_key_bytes: Vec<u8>,
+    // Uses `p256` crate (RustCrypto) — supports persistent keys via
+    // SecretKey::to_bytes() / from_bytes(). `ring` was rejected because
+    // EphemeralPrivateKey is single-use and cannot be persisted.
+    private_key: p256::SecretKey,
     public_key_bytes: Vec<u8>,
     fingerprint: String,
 }
 
 pub struct SessionCrypto {
-    server_write_key: aead::LessSafeKey,
-    client_write_key: aead::LessSafeKey,
+    server_write_key: aes_gcm::Aes256Gcm,
+    client_write_key: aes_gcm::Aes256Gcm,
     server_write_iv: [u8; 12],
     client_write_iv: [u8; 12],
     server_frame_counter: u64,
