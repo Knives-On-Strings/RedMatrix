@@ -187,6 +187,7 @@ TDD: every command and parser gets a test BEFORE implementation.
 
 - [ ] Reach out to Geoffrey Bennett for advice
 - [ ] Investigate Gen 4 FCP protocol support
+- [ ] **MCP server / AI agent interface** — Expose RedMatrix as an MCP (Model Context Protocol) server so AI agents (Claude, etc.) can read device state and control the audio interface programmatically. Use cases: automated studio setup ("set up my podcast routing"), voice-controlled mixing, integration with DAW automation agents. The WebSocket API is already JSON-based — wrapping it as MCP tools would be straightforward.
 - [ ] Clarett USB / Clarett+ support
 - [ ] Firmware update capability from Windows
 - [ ] Android client
