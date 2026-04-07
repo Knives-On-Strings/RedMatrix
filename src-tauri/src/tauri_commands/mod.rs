@@ -82,6 +82,21 @@ pub fn save_user_config(serial: String, config_data: config::UserConfig) -> Resu
     config::save_config(&path, &config_data)
 }
 
+/// Approve or deny a pairing request from a remote client.
+///
+/// Called from the frontend PairingModal when the user clicks Approve or Deny.
+/// TODO: Forward approval to the session handler via a channel.
+/// The channel wiring requires passing the pairing_tx from the server into Tauri app state.
+#[tauri::command]
+pub fn approve_pairing(fingerprint: String, approved: bool) -> Result<(), String> {
+    log::info!(
+        "Pairing {} for fingerprint {}",
+        if approved { "approved" } else { "denied" },
+        fingerprint
+    );
+    Ok(())
+}
+
 /// Legacy greeting command (smoke test for IPC).
 #[tauri::command]
 pub fn greet(name: &str) -> String {

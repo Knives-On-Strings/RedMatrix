@@ -16,6 +16,7 @@ import { TauriTransport } from "../transport";
 import { loadConfig, saveConfig, DEFAULT_CONFIG } from "./useConfig";
 import type { UserConfig } from "./useConfig";
 import { THEMES, applyTheme } from "../themes";
+import { showToast } from "../components/Toast";
 
 export interface StereoPairConfig {
   left: number;
@@ -133,9 +134,26 @@ export function DeviceProvider(props: DeviceProviderProps) {
       setState(newState);
     });
 
+    // Subscribe to server messages (disconnect, reconnect, errors)
+    const unsubMessage = transport.onMessage((message) => {
+      if (message.type === "device_disconnected") {
+        setState(null);
+        setError("Device disconnected");
+        showToast("Device disconnected — reconnecting...", "error");
+      } else if (message.type === "device_connected") {
+        // Re-fetch full state
+        transportRef.current.getState().then(setState).catch(() => {});
+        setError(null);
+        showToast("Device reconnected", "success");
+      } else if (message.type === "error") {
+        showToast(`Error: ${message.message}`, "error");
+      }
+    });
+
     return () => {
       cancelled = true;
       unsub();
+      unsubMessage();
       // Flush any pending save
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };

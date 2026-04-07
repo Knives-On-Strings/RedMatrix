@@ -7,6 +7,7 @@
  */
 
 import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { DeviceState, ClientMessage, ServerMessage } from "../types";
 import type { Transport } from "./types";
 
@@ -16,15 +17,41 @@ type MessageCallback = (message: ServerMessage) => void;
 
 export class TauriTransport implements Transport {
   private connected = false;
+  private unlisteners: UnlistenFn[] = [];
   private stateCallbacks: StateCallback[] = [];
   private meterCallbacks: MeterCallback[] = [];
   private messageCallbacks: MessageCallback[] = [];
 
   async connect(): Promise<void> {
+    // Listen for state updates from backend
+    this.unlisteners.push(
+      await listen<DeviceState>("state_update", (event) => {
+        this._notifyState(event.payload);
+      })
+    );
+
+    // Listen for meter data
+    this.unlisteners.push(
+      await listen<number[]>("meter_data", (event) => {
+        this._notifyMeters(new Float32Array(event.payload));
+      })
+    );
+
+    // Listen for server messages (errors, disconnect, pairing requests)
+    this.unlisteners.push(
+      await listen<ServerMessage>("server_message", (event) => {
+        this._notifyMessage(event.payload);
+      })
+    );
+
     this.connected = true;
   }
 
   async disconnect(): Promise<void> {
+    for (const unlisten of this.unlisteners) {
+      unlisten();
+    }
+    this.unlisteners = [];
     this.connected = false;
   }
 

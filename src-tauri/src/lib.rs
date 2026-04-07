@@ -27,6 +27,7 @@ pub fn run() {
             tauri_commands::list_mock_devices,
             tauri_commands::load_user_config,
             tauri_commands::save_user_config,
+            tauri_commands::approve_pairing,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

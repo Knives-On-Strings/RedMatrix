@@ -2,6 +2,11 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import App from "./App";
 
+// Mock Tauri event API so listen() calls don't fail outside Tauri runtime
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn(() => Promise.resolve(() => {})),
+}));
+
 // Mock the Tauri invoke API so DeviceProvider doesn't try real IPC
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn((cmd: string) => {
