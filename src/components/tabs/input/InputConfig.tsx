@@ -148,7 +148,10 @@ function InputPairSection({ label, inputs, pairs, onTogglePair, onRenamePair }: 
 export default function InputConfig({ state }: InputConfigProps) {
   const { sendCommand, getLabel, setLabel, inputStereoPairs, setInputStereoPairs } = useDevice();
 
-  const analogue = state.inputs.filter((i) => i.type === "analogue");
+  const hasTalkback = state.features.has_talkback;
+  const allAnalogue = state.inputs.filter((i) => i.type === "analogue");
+  const analogue = hasTalkback ? allAnalogue.slice(0, -1) : allAnalogue;
+  const talkback = hasTalkback ? allAnalogue.slice(-1) : [];
   const spdif = state.inputs.filter((i) => i.type === "spdif");
   const adat = state.inputs.filter((i) => i.type === "adat");
   const dawOutCount = state.port_counts.pcm.outputs;
@@ -249,6 +252,21 @@ export default function InputConfig({ state }: InputConfigProps) {
         <div className="mb-4">
           <h4 className="text-[10px] text-neutral-500 uppercase tracking-wider mb-1">ADAT Inputs</h4>
           {adat.map((input) => (
+            <InputRow
+              key={`${input.type}-${input.index}`}
+              input={input}
+              onToggle={(f) => handleToggle(input, f)}
+              customLabel={getLabel("inputs", `${input.type}_${input.index}`, "")}
+              onLabelChange={(v) => setLabel("inputs", `${input.type}_${input.index}`, v)}
+            />
+          ))}
+        </div>
+      )}
+
+      {talkback.length > 0 && (
+        <div className="mb-4">
+          <h4 className="text-[10px] text-neutral-500 uppercase tracking-wider mb-1">Talkback</h4>
+          {talkback.map((input) => (
             <InputRow
               key={`${input.type}-${input.index}`}
               input={input}

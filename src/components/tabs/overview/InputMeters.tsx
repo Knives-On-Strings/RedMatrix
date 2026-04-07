@@ -39,14 +39,21 @@ function InputGroup({ label, inputs, levels }: { label: string; inputs: InputSta
 export default function InputMeters({ state }: InputMetersProps) {
   const { meters } = useDevice();
 
-  const analogue = state.inputs.filter((i) => i.type === "analogue");
+  const hasTalkback = state.features.has_talkback;
+
+  // Separate talkback from analogue inputs
+  const allAnalogue = state.inputs.filter((i) => i.type === "analogue");
+  const analogue = hasTalkback ? allAnalogue.slice(0, -1) : allAnalogue;
+  const talkback = hasTalkback ? allAnalogue.slice(-1) : [];
   const spdif = state.inputs.filter((i) => i.type === "spdif");
   const adat = state.inputs.filter((i) => i.type === "adat");
 
-  // Slice meter data by input group
-  const analogueLevels = Array.from(meters.slice(0, analogue.length));
-  const spdifLevels = Array.from(meters.slice(analogue.length, analogue.length + spdif.length));
-  const adatLevels = Array.from(meters.slice(analogue.length + spdif.length, analogue.length + spdif.length + adat.length));
+  // Slice meter data by input group (order matches state.inputs)
+  let offset = 0;
+  const analogueLevels = Array.from(meters.slice(offset, offset + analogue.length)); offset += analogue.length;
+  const talkbackLevels = Array.from(meters.slice(offset, offset + talkback.length)); offset += talkback.length;
+  const spdifLevels = Array.from(meters.slice(offset, offset + spdif.length)); offset += spdif.length;
+  const adatLevels = Array.from(meters.slice(offset, offset + adat.length));
 
   return (
     <div className="flex items-end gap-6 px-4">
@@ -61,6 +68,12 @@ export default function InputMeters({ state }: InputMetersProps) {
         <>
           <div className="w-px h-24 bg-neutral-700/50" />
           <InputGroup label="ADAT" inputs={adat} levels={adatLevels} />
+        </>
+      )}
+      {talkback.length > 0 && (
+        <>
+          <div className="w-px h-24 bg-neutral-700/50" />
+          <InputGroup label="Talkback" inputs={talkback} levels={talkbackLevels} />
         </>
       )}
     </div>

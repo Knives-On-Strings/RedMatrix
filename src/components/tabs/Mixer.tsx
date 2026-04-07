@@ -250,10 +250,12 @@ export default function Mixer() {
   // Mutes derived from gains (channel is "muted" if gain is -80)
   const busMutes = busGains.map((g) => g <= -80);
 
-  const analogue = state.inputs.filter((i) => i.type === "analogue");
+  const hasTalkback = state.features.has_talkback;
+  const allAnalogue = state.inputs.filter((i) => i.type === "analogue");
+  const analogue = hasTalkback ? allAnalogue.slice(0, -1) : allAnalogue;
+  const talkback = hasTalkback ? allAnalogue.slice(-1) : [];
   const spdif = state.inputs.filter((i) => i.type === "spdif");
   const adat = state.inputs.filter((i) => i.type === "adat");
-  // Meter data from Tauri events (sliced to match input channels)
   const meterLevels = meters;
 
   const handleGainChange = (bus: number, ch: number, db: number) => {
@@ -321,12 +323,12 @@ export default function Mixer() {
               <ChannelGroup
                 label="S/PDIF"
                 inputs={spdif}
-                gains={busGains.slice(analogue.length, analogue.length + spdif.length)}
-                solos={busSolos.slice(analogue.length, analogue.length + spdif.length)}
-                mutes={busMutes.slice(analogue.length, analogue.length + spdif.length)}
-                levels={Array.from(meterLevels.slice(analogue.length, analogue.length + spdif.length))}
+                gains={busGains.slice(analogue.length + talkback.length, analogue.length + talkback.length + spdif.length)}
+                solos={busSolos.slice(analogue.length + talkback.length, analogue.length + talkback.length + spdif.length)}
+                mutes={busMutes.slice(analogue.length + talkback.length, analogue.length + talkback.length + spdif.length)}
+                levels={Array.from(meterLevels.slice(analogue.length + talkback.length, analogue.length + talkback.length + spdif.length))}
                 busIndex={activeBus}
-                indexOffset={analogue.length}
+                indexOffset={analogue.length + talkback.length}
                 onGainChange={handleGainChange}
                 onSoloToggle={handleSoloToggle}
                 onMuteToggle={handleMuteToggle}
@@ -339,12 +341,30 @@ export default function Mixer() {
               <ChannelGroup
                 label="ADAT"
                 inputs={adat}
-                gains={busGains.slice(analogue.length + spdif.length)}
-                solos={busSolos.slice(analogue.length + spdif.length)}
-                mutes={busMutes.slice(analogue.length + spdif.length)}
-                levels={Array.from(meterLevels.slice(analogue.length + spdif.length))}
+                gains={busGains.slice(analogue.length + talkback.length + spdif.length)}
+                solos={busSolos.slice(analogue.length + talkback.length + spdif.length)}
+                mutes={busMutes.slice(analogue.length + talkback.length + spdif.length)}
+                levels={Array.from(meterLevels.slice(analogue.length + talkback.length + spdif.length))}
                 busIndex={activeBus}
-                indexOffset={analogue.length + spdif.length}
+                indexOffset={analogue.length + talkback.length + spdif.length}
+                onGainChange={handleGainChange}
+                onSoloToggle={handleSoloToggle}
+                onMuteToggle={handleMuteToggle}
+              />
+            </>
+          )}
+          {talkback.length > 0 && (
+            <>
+              <div className="w-px bg-neutral-700/50 self-stretch" />
+              <ChannelGroup
+                label="Talkback"
+                inputs={talkback}
+                gains={busGains.slice(analogue.length, analogue.length + talkback.length)}
+                solos={busSolos.slice(analogue.length, analogue.length + talkback.length)}
+                mutes={busMutes.slice(analogue.length, analogue.length + talkback.length)}
+                levels={Array.from(meterLevels.slice(analogue.length, analogue.length + talkback.length))}
+                busIndex={activeBus}
+                indexOffset={analogue.length}
                 onGainChange={handleGainChange}
                 onSoloToggle={handleSoloToggle}
                 onMuteToggle={handleMuteToggle}
