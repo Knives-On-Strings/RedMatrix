@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { DeviceState, OutputState } from "../../../types";
+import { useDevice } from "../../../hooks/useDevice";
 
 interface OutputConfigProps {
   state: DeviceState;
@@ -100,11 +101,15 @@ function StereoPairRow({ pair, leftName, rightName, onToggle, onNameChange }: {
   );
 }
 
-function OutputRow({ output }: { output: OutputState }) {
+function OutputRow({ output, customLabel, onLabelChange }: {
+  output: OutputState;
+  customLabel: string;
+  onLabelChange: (value: string) => void;
+}) {
   return (
     <div className="flex items-center gap-3 py-2 border-b border-neutral-800 last:border-0">
       <span className="text-[10px] text-neutral-500 font-mono w-6 text-right">{output.index + 1}</span>
-      <span className="text-xs text-neutral-300 w-28">{output.name}</span>
+      <span className="text-xs text-neutral-300 w-28">{customLabel || output.name}</span>
 
       <div className="flex items-center gap-2">
         <span className="text-[9px] text-neutral-500">Vol:</span>
@@ -130,7 +135,9 @@ function OutputRow({ output }: { output: OutputState }) {
 
       <input
         type="text"
-        placeholder="Custom label..."
+        value={customLabel}
+        onChange={(e) => onLabelChange(e.target.value)}
+        placeholder={output.name}
         className="text-xs bg-neutral-800 border border-neutral-700 rounded px-2 py-1 w-32 text-neutral-300 placeholder-neutral-600 focus:border-neutral-500 focus:outline-none"
       />
     </div>
@@ -138,6 +145,7 @@ function OutputRow({ output }: { output: OutputState }) {
 }
 
 export default function OutputConfig({ state }: OutputConfigProps) {
+  const { getLabel, setLabel } = useDevice();
   const [pairs, setPairs] = useState<PairState[]>(() => getDefaultPairs(state.outputs));
 
   const handleToggle = (index: number) => {
@@ -177,7 +185,12 @@ export default function OutputConfig({ state }: OutputConfigProps) {
       <div className="mb-6">
         <h4 className="text-[10px] text-neutral-500 uppercase tracking-wider mb-2">Physical Outputs</h4>
         {state.outputs.map((output) => (
-          <OutputRow key={output.index} output={output} />
+          <OutputRow
+            key={output.index}
+            output={output}
+            customLabel={getLabel("outputs", `analogue_${output.index}`, "")}
+            onLabelChange={(v) => setLabel("outputs", `analogue_${output.index}`, v)}
+          />
         ))}
       </div>
 

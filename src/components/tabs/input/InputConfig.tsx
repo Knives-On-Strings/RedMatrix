@@ -20,10 +20,15 @@ function ToggleBadge({ label, active, onClick }: { label: string; active: boolea
   );
 }
 
-function InputRow({ input, onToggle }: { input: InputState; onToggle: (feature: string) => void }) {
+function InputRow({ input, onToggle, customLabel, onLabelChange }: {
+  input: InputState;
+  onToggle: (feature: string) => void;
+  customLabel: string;
+  onLabelChange: (value: string) => void;
+}) {
   return (
     <div className="flex items-center gap-3 py-2 border-b border-neutral-800">
-      <span className="text-xs text-neutral-300 w-28">{input.name}</span>
+      <span className="text-xs text-neutral-300 w-28">{customLabel || input.name}</span>
       <span className="text-[9px] text-neutral-500 w-16">{input.type}</span>
 
       {input.type === "analogue" && (
@@ -41,8 +46,10 @@ function InputRow({ input, onToggle }: { input: InputState; onToggle: (feature: 
 
       <input
         type="text"
-        placeholder="Custom label..."
-        className="text-xs bg-neutral-800 border border-neutral-700 rounded px-2 py-1 w-32 text-neutral-300 placeholder-neutral-600"
+        value={customLabel}
+        onChange={(e) => onLabelChange(e.target.value)}
+        placeholder={input.name}
+        className="text-xs bg-neutral-800 border border-neutral-700 rounded px-2 py-1 w-32 text-neutral-300 placeholder-neutral-600 focus:border-neutral-500 focus:outline-none"
       />
     </div>
   );
@@ -78,7 +85,7 @@ function DawStereoPairRow({ left, right, name }: { left: number; right: number; 
 }
 
 export default function InputConfig({ state }: InputConfigProps) {
-  const { sendCommand } = useDevice();
+  const { sendCommand, getLabel, setLabel } = useDevice();
 
   const analogue = state.inputs.filter((i) => i.type === "analogue");
   const spdif = state.inputs.filter((i) => i.type === "spdif");
@@ -110,7 +117,13 @@ export default function InputConfig({ state }: InputConfigProps) {
         <div className="mb-4">
           <h4 className="text-[10px] text-neutral-500 uppercase tracking-wider mb-1">Analogue Inputs</h4>
           {analogue.map((input) => (
-            <InputRow key={`${input.type}-${input.index}`} input={input} onToggle={(f) => handleToggle(input, f)} />
+            <InputRow
+              key={`${input.type}-${input.index}`}
+              input={input}
+              onToggle={(f) => handleToggle(input, f)}
+              customLabel={getLabel("inputs", `${input.type}_${input.index}`, "")}
+              onLabelChange={(v) => setLabel("inputs", `${input.type}_${input.index}`, v)}
+            />
           ))}
         </div>
       )}
@@ -119,7 +132,13 @@ export default function InputConfig({ state }: InputConfigProps) {
         <div className="mb-4">
           <h4 className="text-[10px] text-neutral-500 uppercase tracking-wider mb-1">S/PDIF Inputs</h4>
           {spdif.map((input) => (
-            <InputRow key={`${input.type}-${input.index}`} input={input} onToggle={(f) => handleToggle(input, f)} />
+            <InputRow
+              key={`${input.type}-${input.index}`}
+              input={input}
+              onToggle={(f) => handleToggle(input, f)}
+              customLabel={getLabel("inputs", `${input.type}_${input.index}`, "")}
+              onLabelChange={(v) => setLabel("inputs", `${input.type}_${input.index}`, v)}
+            />
           ))}
         </div>
       )}
@@ -128,7 +147,13 @@ export default function InputConfig({ state }: InputConfigProps) {
         <div className="mb-4">
           <h4 className="text-[10px] text-neutral-500 uppercase tracking-wider mb-1">ADAT Inputs</h4>
           {adat.map((input) => (
-            <InputRow key={`${input.type}-${input.index}`} input={input} onToggle={(f) => handleToggle(input, f)} />
+            <InputRow
+              key={`${input.type}-${input.index}`}
+              input={input}
+              onToggle={(f) => handleToggle(input, f)}
+              customLabel={getLabel("inputs", `${input.type}_${input.index}`, "")}
+              onLabelChange={(v) => setLabel("inputs", `${input.type}_${input.index}`, v)}
+            />
           ))}
         </div>
       )}
