@@ -62,20 +62,28 @@ export default function OutputMatrix({ state }: OutputMatrixProps) {
   };
 
   const handleDirect = () => {
-    dests.forEach((dest, i) => {
-      sendCommand({
-        type: "set_route",
-        payload: { destination: dest.index, source_type: "pcm", source_index: i },
-      });
+    sendCommand({
+      type: "set_routes_batch",
+      payload: {
+        routes: dests.map((dest, i) => ({
+          destination: dest.index,
+          source_type: "pcm" as const,
+          source_index: i,
+        })),
+      },
     });
   };
 
   const handleClearAll = () => {
-    dests.forEach((dest) => {
-      sendCommand({
-        type: "set_route",
-        payload: { destination: dest.index, source_type: "off", source_index: 0 },
-      });
+    sendCommand({
+      type: "set_routes_batch",
+      payload: {
+        routes: dests.map((dest) => ({
+          destination: dest.index,
+          source_type: "off" as const,
+          source_index: 0,
+        })),
+      },
     });
   };
 

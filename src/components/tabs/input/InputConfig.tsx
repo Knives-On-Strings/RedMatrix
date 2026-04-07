@@ -55,16 +55,22 @@ function InputRow({ input, onToggle, customLabel, onLabelChange }: {
   );
 }
 
-function DawChannelRow({ label }: { label: string }) {
+function DawChannelRow({ defaultLabel, customLabel, onLabelChange }: {
+  defaultLabel: string;
+  customLabel: string;
+  onLabelChange: (value: string) => void;
+}) {
   return (
     <div className="flex items-center gap-3 py-2 border-b border-neutral-800">
-      <span className="text-xs text-neutral-300 w-28">{label}</span>
+      <span className="text-xs text-neutral-300 w-28">{customLabel || defaultLabel}</span>
       <span className="text-[9px] text-neutral-500 w-16">PCM</span>
       <div className="flex-1" />
       <input
         type="text"
-        placeholder="Custom label..."
-        className="text-xs bg-neutral-800 border border-neutral-700 rounded px-2 py-1 w-32 text-neutral-300 placeholder-neutral-600"
+        value={customLabel}
+        onChange={(e) => onLabelChange(e.target.value)}
+        placeholder={defaultLabel}
+        className="text-xs bg-neutral-800 border border-neutral-700 rounded px-2 py-1 w-32 text-neutral-300 placeholder-neutral-600 focus:border-neutral-500 focus:outline-none"
       />
     </div>
   );
@@ -300,7 +306,12 @@ export default function InputConfig({ state }: InputConfigProps) {
 
           {/* Individual DAW channels */}
           {Array.from({ length: dawOutCount }, (_, i) => (
-            <DawChannelRow key={i} label={`DAW Out ${i + 1}`} />
+            <DawChannelRow
+              key={i}
+              defaultLabel={`DAW Out ${i + 1}`}
+              customLabel={getLabel("pcm", `pcm_out_${i}`, "")}
+              onLabelChange={(v) => setLabel("pcm", `pcm_out_${i}`, v)}
+            />
           ))}
         </div>
       )}

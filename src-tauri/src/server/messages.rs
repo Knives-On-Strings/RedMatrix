@@ -89,6 +89,17 @@ pub struct SpdifModePayload {
     pub mode: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SetBusGainsPayload {
+    pub mix: u32,
+    pub gain_db: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SetRoutesBatchPayload {
+    pub routes: Vec<RoutePayload>,
+}
+
 // ── Server → Client messages ─────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -196,6 +207,18 @@ pub enum ClientMessage {
     },
     SaveConfig {
         payload: serde_json::Value,
+    },
+    /// Clear all mixer crosspoints to -80dB (silence).
+    ClearMixer {
+        payload: serde_json::Value,
+    },
+    /// Set all crosspoints in a bus to a specific gain.
+    SetBusGains {
+        payload: SetBusGainsPayload,
+    },
+    /// Set multiple routes at once.
+    SetRoutesBatch {
+        payload: SetRoutesBatchPayload,
     },
 }
 

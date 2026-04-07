@@ -27,12 +27,14 @@ function getDefaultPairs(outputs: OutputState[]): StereoPairConfig[] {
   return pairs;
 }
 
-function StereoPairRow({ pair, leftName, rightName, onToggle, onNameChange }: {
+function StereoPairRow({ pair, leftLabel, rightLabel, onToggle, onNameChange, onLeftLabelChange, onRightLabelChange }: {
   pair: StereoPairConfig;
-  leftName: string;
-  rightName: string;
+  leftLabel: string;
+  rightLabel: string;
   onToggle: () => void;
   onNameChange: (name: string) => void;
+  onLeftLabelChange: (name: string) => void;
+  onRightLabelChange: (name: string) => void;
 }) {
   return (
     <div className="py-3 border-b border-neutral-800 last:border-0">
@@ -70,16 +72,20 @@ function StereoPairRow({ pair, leftName, rightName, onToggle, onNameChange }: {
               <span className="text-[9px] text-neutral-600">L:</span>
               <input
                 type="text"
-                defaultValue={leftName}
-                className="text-xs bg-neutral-800 border border-neutral-700 rounded px-2 py-1 flex-1 text-neutral-300 focus:border-neutral-500 focus:outline-none"
+                value={leftLabel}
+                onChange={(e) => onLeftLabelChange(e.target.value)}
+                placeholder={`Output ${pair.left + 1}`}
+                className="text-xs bg-neutral-800 border border-neutral-700 rounded px-2 py-1 flex-1 text-neutral-300 placeholder-neutral-600 focus:border-neutral-500 focus:outline-none"
               />
             </div>
             <div className="flex items-center gap-1 flex-1">
               <span className="text-[9px] text-neutral-600">R:</span>
               <input
                 type="text"
-                defaultValue={rightName}
-                className="text-xs bg-neutral-800 border border-neutral-700 rounded px-2 py-1 flex-1 text-neutral-300 focus:border-neutral-500 focus:outline-none"
+                value={rightLabel}
+                onChange={(e) => onRightLabelChange(e.target.value)}
+                placeholder={`Output ${pair.right + 1}`}
+                className="text-xs bg-neutral-800 border border-neutral-700 rounded px-2 py-1 flex-1 text-neutral-300 placeholder-neutral-600 focus:border-neutral-500 focus:outline-none"
               />
             </div>
           </div>
@@ -173,10 +179,12 @@ export default function OutputConfig({ state }: OutputConfigProps) {
             <StereoPairRow
               key={pair.left}
               pair={pair}
-              leftName={state.outputs[pair.left]?.name ?? `Output ${pair.left + 1}`}
-              rightName={state.outputs[pair.right]?.name ?? `Output ${pair.right + 1}`}
+              leftLabel={getLabel("outputs", `analogue_${pair.left}`, "")}
+              rightLabel={getLabel("outputs", `analogue_${pair.right}`, "")}
               onToggle={() => handleToggle(i)}
               onNameChange={(name) => handleNameChange(i, name)}
+              onLeftLabelChange={(v) => setLabel("outputs", `analogue_${pair.left}`, v)}
+              onRightLabelChange={(v) => setLabel("outputs", `analogue_${pair.right}`, v)}
             />
           ))}
         </div>
@@ -217,8 +225,10 @@ export default function OutputConfig({ state }: OutputConfigProps) {
                 </button>
                 <input
                   type="text"
-                  defaultValue={`DAW In ${i * 2 + 1}/${i * 2 + 2}`}
-                  className="text-xs bg-neutral-800 border border-neutral-700 rounded px-2 py-1 flex-1 text-neutral-300 focus:border-neutral-500 focus:outline-none"
+                  value={getLabel("pcm", `pcm_in_${i * 2}`, "")}
+                  onChange={(e) => setLabel("pcm", `pcm_in_${i * 2}`, e.target.value)}
+                  placeholder={`DAW In ${i * 2 + 1}/${i * 2 + 2}`}
+                  className="text-xs bg-neutral-800 border border-neutral-700 rounded px-2 py-1 flex-1 text-neutral-300 placeholder-neutral-600 focus:border-neutral-500 focus:outline-none"
                 />
               </div>
             ))}

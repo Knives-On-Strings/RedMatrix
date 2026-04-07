@@ -80,11 +80,31 @@ export default function Header({ onSettingsClick, onAboutClick, onDeviceSwitch }
         </button>
       </div>
 
-      {/* Right: volume readout + settings/about */}
+      {/* Right: volume control + settings/about */}
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2">
           <span className="text-xs text-neutral-500">MON</span>
-          <span className="text-sm text-neutral-300 font-mono">{formatDb(masterVolumeDb)} dB</span>
+          <button
+            onClick={() => sendCommand({ type: "set_master_volume", payload: { db: Math.max(-127, masterVolumeDb - 1) } })}
+            className="w-5 h-5 text-xs bg-neutral-700 text-neutral-400 rounded hover:bg-neutral-600"
+          >
+            −
+          </button>
+          <input
+            type="range"
+            min={0}
+            max={127}
+            value={masterVolumeDb + 127}
+            onChange={(e) => sendCommand({ type: "set_master_volume", payload: { db: Number(e.target.value) - 127 } })}
+            className="w-20 h-1.5 appearance-none cursor-pointer accent-neutral-400 bg-neutral-700 rounded-full"
+          />
+          <button
+            onClick={() => sendCommand({ type: "set_master_volume", payload: { db: Math.min(0, masterVolumeDb + 1) } })}
+            className="w-5 h-5 text-xs bg-neutral-700 text-neutral-400 rounded hover:bg-neutral-600"
+          >
+            +
+          </button>
+          <span className="text-sm text-neutral-300 font-mono w-14 text-right">{formatDb(masterVolumeDb)} dB</span>
         </div>
 
         <div className="w-px h-5 bg-neutral-700" />

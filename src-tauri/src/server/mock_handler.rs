@@ -202,6 +202,44 @@ pub async fn handle_command(
             }
         }
         // Ping and ClientHello are handled by the session layer, not here
+        ClientMessage::ClearMixer { .. } => {
+            for (bus_idx, bus) in state.mixer.gains.iter_mut().enumerate() {
+                for (ch_idx, gain) in bus.iter_mut().enumerate() {
+                    *gain = -80.0;
+                    changes.insert(
+                        format!("mixer.gains.{}.{}", bus_idx, ch_idx),
+                        serde_json::json!(-80.0),
+                    );
+                }
+            }
+        }
+        ClientMessage::SetBusGains { payload } => {
+            if let Some(bus) = state.mixer.gains.get_mut(payload.mix as usize) {
+                for (ch_idx, gain) in bus.iter_mut().enumerate() {
+                    *gain = payload.gain_db;
+                    changes.insert(
+                        format!("mixer.gains.{}.{}", payload.mix, ch_idx),
+                        serde_json::json!(payload.gain_db),
+                    );
+                }
+            }
+        }
+        ClientMessage::SetRoutesBatch { payload } => {
+            for route in &payload.routes {
+                if let Some(entry) = state.routing.get_mut(route.destination as usize) {
+                    entry.route_type = route.source_type.clone();
+                    entry.index = route.source_index;
+                    changes.insert(
+                        format!("routing.{}.type", route.destination),
+                        Value::String(route.source_type.clone()),
+                    );
+                    changes.insert(
+                        format!("routing.{}.index", route.destination),
+                        serde_json::json!(route.source_index),
+                    );
+                }
+            }
+        }
         ClientMessage::Ping | ClientMessage::ClientHello { .. } => {}
     }
 

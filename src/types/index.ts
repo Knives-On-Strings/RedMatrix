@@ -243,7 +243,10 @@ export type ClientMessage =
   | SetSampleRateMessage
   | SetClockSourceMessage
   | SetSpdifModeMessage
-  | SaveConfigMessage;
+  | SaveConfigMessage
+  | ClearMixerMessage
+  | SetBusGainsMessage
+  | SetRoutesBatchMessage;
 
 export interface ClientHelloMessage {
   type: "client_hello";
@@ -354,4 +357,21 @@ export interface SetSpdifModeMessage {
 export interface SaveConfigMessage {
   type: "save_config";
   payload: Record<string, never>;
+}
+
+export interface ClearMixerMessage {
+  type: "clear_mixer";
+  payload: Record<string, never>;
+}
+
+export interface SetBusGainsMessage {
+  type: "set_bus_gains";
+  payload: { mix: number; gain_db: number };
+}
+
+export interface SetRoutesBatchMessage {
+  type: "set_routes_batch";
+  payload: {
+    routes: Array<{ destination: number; source_type: PortType; source_index: number }>;
+  };
 }
