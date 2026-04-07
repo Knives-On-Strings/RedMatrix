@@ -84,15 +84,15 @@ function DawStereoPairRow({ left, right, name }: { left: number; right: number; 
   );
 }
 
-function InputPairSection({ label, inputs, pairs, onTogglePair }: {
+function InputPairSection({ label, inputs, pairs, onTogglePair, onRenamePair }: {
   label: string;
   inputs: InputState[];
   pairs: InputStereoPairConfig[];
   onTogglePair: (left: number, right: number, inputType: string) => void;
+  onRenamePair: (left: number, right: number, inputType: string, name: string) => void;
 }) {
   if (inputs.length < 2) return null;
 
-  // Build adjacent pairs from available inputs
   const adjacentPairs: { left: InputState; right: InputState }[] = [];
   for (let i = 0; i < inputs.length - 1; i += 2) {
     adjacentPairs.push({ left: inputs[i]!, right: inputs[i + 1]! });
@@ -106,6 +106,7 @@ function InputPairSection({ label, inputs, pairs, onTogglePair }: {
           (p) => p.left === left.index && p.right === right.index && p.input_type === left.type
         );
         const isLinked = existing?.linked ?? false;
+        const pairName = existing?.name ?? "";
 
         return (
           <div key={`${left.type}-${left.index}`} className="flex items-center gap-3 py-2 border-b border-neutral-800 last:border-0">
@@ -124,9 +125,19 @@ function InputPairSection({ label, inputs, pairs, onTogglePair }: {
             >
               {isLinked ? "Linked" : "Unlinked"}
             </button>
-            <span className="text-xs text-neutral-400">
-              {left.name} / {right.name}
-            </span>
+            {isLinked ? (
+              <input
+                type="text"
+                value={pairName}
+                onChange={(e) => onRenamePair(left.index, right.index, left.type, e.target.value)}
+                placeholder={`${left.name} / ${right.name}`}
+                className="text-xs bg-neutral-800 border border-neutral-700 rounded px-2 py-1 flex-1 text-neutral-300 focus:border-neutral-500 focus:outline-none"
+              />
+            ) : (
+              <span className="text-xs text-neutral-400">
+                {left.name} / {right.name}
+              </span>
+            )}
           </div>
         );
       })}
@@ -147,7 +158,6 @@ export default function InputConfig({ state }: InputConfigProps) {
       (p) => p.left === left && p.right === right && p.input_type === inputType
     );
     if (existing) {
-      // Toggle
       setInputStereoPairs(
         inputStereoPairs.map((p) =>
           p.left === left && p.right === right && p.input_type === inputType
@@ -156,12 +166,21 @@ export default function InputConfig({ state }: InputConfigProps) {
         )
       );
     } else {
-      // Create new linked pair
       setInputStereoPairs([
         ...inputStereoPairs,
-        { left, right, name: `${inputType} ${left + 1}/${right + 1}`, linked: true, input_type: inputType },
+        { left, right, name: "", linked: true, input_type: inputType },
       ]);
     }
+  };
+
+  const handleRenamePair = (left: number, right: number, inputType: string, name: string) => {
+    setInputStereoPairs(
+      inputStereoPairs.map((p) =>
+        p.left === left && p.right === right && p.input_type === inputType
+          ? { ...p, name }
+          : p
+      )
+    );
   };
 
   const handleToggle = (input: InputState, feature: string) => {
@@ -188,9 +207,9 @@ export default function InputConfig({ state }: InputConfigProps) {
       {/* Stereo pairs for all input types */}
       <div className="mb-4">
         <h4 className="text-[10px] text-neutral-500 uppercase tracking-wider mb-2">Stereo Pairs</h4>
-        <InputPairSection label="Analogue" inputs={analogue} pairs={inputStereoPairs} onTogglePair={handleTogglePair} />
-        <InputPairSection label="S/PDIF" inputs={spdif} pairs={inputStereoPairs} onTogglePair={handleTogglePair} />
-        <InputPairSection label="ADAT" inputs={adat} pairs={inputStereoPairs} onTogglePair={handleTogglePair} />
+        <InputPairSection label="Analogue" inputs={analogue} pairs={inputStereoPairs} onTogglePair={handleTogglePair} onRenamePair={handleRenamePair} />
+        <InputPairSection label="S/PDIF" inputs={spdif} pairs={inputStereoPairs} onTogglePair={handleTogglePair} onRenamePair={handleRenamePair} />
+        <InputPairSection label="ADAT" inputs={adat} pairs={inputStereoPairs} onTogglePair={handleTogglePair} onRenamePair={handleRenamePair} />
         <p className="text-[10px] text-neutral-600 mt-1.5 px-1">
           Linked inputs share a single fader in the Mixer and pan hard L/R automatically.
         </p>
