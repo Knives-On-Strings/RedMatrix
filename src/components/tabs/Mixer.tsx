@@ -132,9 +132,75 @@ function ChannelGroup({ label, inputs, gains, solos, mutes, busIndex, onGainChan
   );
 }
 
+function BusButton({ isActive, label, customName, onClick, onRename }: {
+  isActive: boolean;
+  label: string;
+  customName: string;
+  onClick: () => void;
+  onRename: (name: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState(customName);
+
+  const handleDoubleClick = () => {
+    setEditValue(customName);
+    setEditing(true);
+  };
+
+  const handleBlur = () => {
+    setEditing(false);
+    onRename(editValue.trim());
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      setEditing(false);
+      onRename(editValue.trim());
+    } else if (e.key === "Escape") {
+      setEditing(false);
+    }
+  };
+
+  if (editing) {
+    return (
+      <input
+        type="text"
+        value={editValue}
+        onChange={(e) => setEditValue(e.target.value)}
+        onBlur={handleBlur}
+        onKeyDown={handleKeyDown}
+        autoFocus
+        className="w-20 h-7 text-[10px] bg-neutral-800 border border-neutral-500 rounded px-1 text-neutral-200 focus:outline-none"
+        placeholder={label}
+      />
+    );
+  }
+
+  return (
+    <button
+      onClick={onClick}
+      onDoubleClick={handleDoubleClick}
+      title={customName ? `${label}: ${customName} (double-click to rename)` : `${label} (double-click to name)`}
+      className={`h-7 px-2 text-xs font-bold rounded flex items-center gap-1 ${
+        isActive
+          ? "bg-red-500 text-white"
+          : "bg-neutral-700 text-neutral-400 hover:bg-neutral-600"
+      }`}
+    >
+      <span>{label}</span>
+      {customName && (
+        <span className={`text-[9px] font-normal ${isActive ? "text-red-100" : "text-neutral-500"}`}>
+          {customName}
+        </span>
+      )}
+    </button>
+  );
+}
+
 export default function Mixer() {
   const [state, setState] = useState<DeviceState | null>(null);
   const [activeBus, setActiveBus] = useState(0);
+  const [busNames, setBusNames] = useState<Record<number, string>>({});
 
   useEffect(() => {
     setState(mockDeviceState());
@@ -149,7 +215,12 @@ export default function Mixer() {
   }
 
   const busCount = state.port_counts.mix.outputs;
-  const busLabel = (i: number) => String.fromCharCode(65 + i); // A, B, C...
+  const busLabel = (i: number) => String.fromCharCode(65 + i);
+
+  const handleBusRename = (index: number, name: string) => {
+    setBusNames((prev) => ({ ...prev, [index]: name }));
+    // TODO: persist to local config file
+  };
 
   const busGains = state.mixer.gains[activeBus] ?? [];
   const busSolos = state.mixer.soloed[activeBus] ?? [];
@@ -173,21 +244,19 @@ export default function Mixer() {
   return (
     <div className="flex flex-col h-full">
       {/* Bus selector */}
-      <div className="flex items-center gap-1 px-4 py-2 border-b border-neutral-700">
-        <span className="text-xs text-neutral-500 mr-2">Mix Bus:</span>
+      <div className="flex items-center gap-1 px-4 py-2 border-b border-neutral-700 overflow-x-auto">
+        <span className="text-xs text-neutral-500 mr-2 flex-shrink-0">Mix Bus:</span>
         {Array.from({ length: Math.min(busCount, 12) }, (_, i) => (
-          <button
+          <BusButton
             key={i}
+            isActive={activeBus === i}
+            label={busLabel(i)}
+            customName={busNames[i] ?? ""}
             onClick={() => setActiveBus(i)}
-            className={`w-7 h-7 text-xs font-bold rounded ${
-              activeBus === i
-                ? "bg-red-500 text-white"
-                : "bg-neutral-700 text-neutral-400 hover:bg-neutral-600"
-            }`}
-          >
-            {busLabel(i)}
-          </button>
+            onRename={(name) => handleBusRename(i, name)}
+          />
         ))}
+        <span className="text-[9px] text-neutral-600 ml-2 flex-shrink-0">double-click to name</span>
       </div>
 
       {/* Channel strips */}
