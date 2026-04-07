@@ -44,6 +44,30 @@ export interface ChannelLabels {
   buses: Record<string, string>;
 }
 
+/**
+ * Stereo pair configuration.
+ * Stored client-side, keyed by device serial number.
+ * Defaults come from device config (line_out_descrs).
+ */
+export interface StereoPair {
+  /** Left channel output index */
+  left: number;
+  /** Right channel output index */
+  right: number;
+  /** Display name for the pair (e.g. "Main Monitors", "HP 1") */
+  name: string;
+}
+
+/**
+ * Full local config for a device (not sent over WebSocket).
+ * Stored in %USERPROFILE%/knivesonstrings/redmatrix/device_{serial}.json
+ */
+export interface LocalDeviceConfig {
+  serial: string;
+  labels: ChannelLabels;
+  stereo_pairs: StereoPair[];
+}
+
 export interface DeviceInfo {
   name: string;
   pid: string;

@@ -94,6 +94,33 @@ export default function Settings() {
         </SettingRow>
       </SettingGroup>
 
+      <SettingGroup title="Stereo Pairs">
+        {[
+          { left: 0, right: 1, name: "Monitor 1 (MAIN)" },
+          { left: 2, right: 3, name: "Monitor 2 (ALT)" },
+          { left: 4, right: 5, name: "Line 5-6" },
+          { left: 6, right: 7, name: "Headphones 1" },
+          { left: 8, right: 9, name: "Headphones 2" },
+        ].map((pair) => (
+          <SettingRow key={pair.left} label={pair.name}>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-neutral-500 font-mono">
+                Out {pair.left + 1}/{pair.right + 1}
+              </span>
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-green-900 text-green-300">
+                Linked
+              </span>
+            </div>
+          </SettingRow>
+        ))}
+        <div className="py-2">
+          <p className="text-[10px] text-neutral-600 leading-relaxed">
+            Linked outputs share a single fader in the Mixer and appear as one stereo
+            destination in the Patchbay. Unlink to control L and R independently.
+          </p>
+        </div>
+      </SettingGroup>
+
       <SettingGroup title="Device">
         <SettingRow label="Device">
           <span className="text-sm text-neutral-400">{state.device.name}</span>
