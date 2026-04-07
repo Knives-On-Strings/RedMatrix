@@ -168,6 +168,7 @@ Sent once on connect. Contains the entire device state. The client builds its UI
     "direct_monitor": 0
   },
   "meter_count": 65,
+  "save_config_remaining": 12,
   "port_counts": {
     "analogue": { "inputs": 9, "outputs": 10 },
     "spdif": { "inputs": 2, "outputs": 2 },
@@ -397,21 +398,27 @@ Future versions may add new message types (which old clients ignore) or change e
 
 The following commands have **hard server-side rate limits** to protect the device hardware. These limits cannot be bypassed by any client, regardless of authentication status.
 
-| Command | Cooldown | Reason |
-|---------|----------|--------|
-| `save_config` | 5 minutes | Flash has finite write cycles (~100k). Rapid writes will physically destroy the storage. |
-| `set_sample_rate` | 10 seconds | Causes device re-enumeration and audio interruption. |
-| `set_spdif_mode` | 10 seconds | Causes routing restructure and audio interruption. |
+| Command | Default Limit | Reason |
+|---------|---------------|--------|
+| `save_config` | 12 per hour (rolling window) | Flash has finite write cycles (~100k). Sustained rapid writes will degrade the storage. |
+| `set_sample_rate` | 10-second cooldown | Causes device re-enumeration and audio interruption. |
+| `set_spdif_mode` | 10-second cooldown | Causes routing restructure and audio interruption. |
 
-Excess commands within the cooldown are rejected with:
+**`save_config` behavior:**
+- First 12 saves in any rolling 60-minute window are executed immediately.
+- When the limit is reached, the server rejects further saves and notifies all clients:
 
 ```json
 {
   "type": "error",
   "code": "rate_limited",
-  "message": "save_config can only be used once every 5 minutes",
-  "retry_after_ms": 287000
+  "message": "Config save rate limit reached (12/hour)",
+  "retry_after_ms": 182000
 }
 ```
 
-These limits are enforced per-server (not per-client) — if iPad A saves config, iPad B cannot save again until the cooldown expires.
+- Clients should show a warning when approaching the limit (e.g., "8 of 12 saves used this hour").
+- The `device_state` includes `save_config_remaining: 12` so clients can display this.
+- The limit is configurable in the server config file (`max_saves_per_hour`, default 12). Power users who understand the risk can increase it.
+
+All limits are enforced per-server (not per-client) — saves from any client count toward the same budget.
