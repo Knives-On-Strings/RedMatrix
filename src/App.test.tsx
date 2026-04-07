@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import App from "./App";
 
 // Mock the Tauri invoke API so DeviceProvider doesn't try real IPC
@@ -50,7 +50,7 @@ describe("App", () => {
     render(<App />);
     const nav = screen.getByRole("navigation");
     expect(nav).toBeDefined();
-    const tabNames = ["Overview", "Mixer", "Input", "Output", "Settings"];
+    const tabNames = ["Overview", "Mixer", "Input", "Output"];
     const buttons = screen.getAllByRole("button");
     for (const name of tabNames) {
       expect(buttons.some((b) => b.textContent === name)).toBe(true);

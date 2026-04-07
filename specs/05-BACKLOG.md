@@ -187,6 +187,7 @@ TDD: every command and parser gets a test BEFORE implementation.
 
 - [ ] Reach out to Geoffrey Bennett for advice
 - [ ] Investigate Gen 4 FCP protocol support
+- [ ] **Undo/redo stack** — Snapshot DeviceState before each command, push to undo history. Ctrl+Z to undo (send inverse command to restore previous state), Ctrl+Shift+Z to redo. Client-side state history with configurable depth (e.g., 50 steps). Essential for mixer workflow — "oops, wrong fader" should be one keystroke to fix.
 - [ ] **VCA-style fader groups** — if the 12 hardware mixer buses aren't sufficient for grouping, add a software VCA layer. Deferred: the buses already serve as subgroups and can be custom-labeled. Revisit only if users request it.
 - [ ] **MCP server / AI agent interface** — Expose RedMatrix as an MCP (Model Context Protocol) server so AI agents (Claude, etc.) can read device state and control the audio interface programmatically. Use cases: automated studio setup ("set up my podcast routing"), voice-controlled mixing, integration with DAW automation agents. The WebSocket API is already JSON-based — wrapping it as MCP tools would be straightforward.
 - [ ] Clarett USB / Clarett+ support
