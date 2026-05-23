@@ -133,9 +133,14 @@ npm install
 npm test                    # 4 frontend tests
 cd src-tauri && cargo test  # 159 Rust tests
 
-# Run the app (fully interactive in mock mode)
+# Run the app in development (fully interactive in mock mode)
 cargo tauri dev
+
+# Build the production executable and installer (.exe / .msi)
+cargo tauri build
 ```
+
+The compiled release binaries and installer packages will be placed in `src-tauri/target/release/` and `src-tauri/target/release/bundle/`.
 
 ## Running with Real USB Hardware
 
