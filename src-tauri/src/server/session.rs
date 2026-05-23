@@ -18,6 +18,7 @@ use tokio_tungstenite::WebSocketStream;
 
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use p256::elliptic_curve::sec1::FromEncodedPoint;
+use tauri::Emitter;
 
 use super::broadcast::BroadcastHandle;
 use super::crypto::{CryptoError, PairedDeviceStore, SessionCrypto, ServerKeypair};
@@ -74,8 +75,20 @@ pub async fn run(
     command_tx: mpsc::Sender<ClientCommand>,
     require_pairing: bool,
     pending_pairings: Option<PendingPairings>,
+    app_handle: Option<tauri::AppHandle>,
 ) {
-    if let Err(e) = run_inner(ws_stream, keypair, paired_store, state, broadcast, command_tx, require_pairing, pending_pairings).await
+    if let Err(e) = run_inner(
+        ws_stream,
+        keypair,
+        paired_store,
+        state,
+        broadcast,
+        command_tx,
+        require_pairing,
+        pending_pairings,
+        app_handle,
+    )
+    .await
     {
         log::warn!("Session ended: {}", e);
     }
@@ -92,6 +105,7 @@ async fn run_inner(
     command_tx: mpsc::Sender<ClientCommand>,
     require_pairing: bool,
     pending_pairings: Option<PendingPairings>,
+    app_handle: Option<tauri::AppHandle>,
 ) -> Result<(), SessionError> {
     let (mut write, mut read) = ws_stream.split();
 
@@ -166,9 +180,13 @@ async fn run_inner(
                     let mut map = pairings.lock().await;
                     map.insert(client_fingerprint.clone(), response_tx);
                 }
-                // Note: The Tauri event "pairing_requested" should be emitted
-                // by the listener/server code that has access to the AppHandle.
-                // For now, the React UI listens for this event separately.
+                // Emit the pairing_requested event to Tauri
+                if let Some(ref handle) = app_handle {
+                    let _ = handle.emit("pairing_requested", serde_json::json!({
+                        "client_name": _client_name.clone(),
+                        "fingerprint": client_fingerprint.clone(),
+                    }));
+                }
 
                 let approved = timeout(PAIRING_TIMEOUT, response_rx)
                     .await
@@ -445,7 +463,7 @@ mod tests {
         tokio::spawn(async move {
             let (stream, _) = listener.accept().await.unwrap();
             let ws = tokio_tungstenite::accept_async(stream).await.unwrap();
-            run(ws, kp, ps, st, bc, ctx, false, None).await;
+            run(ws, kp, ps, st, bc, ctx, false, None, None).await;
         });
 
         // 4. Connect as client
@@ -506,7 +524,7 @@ mod tests {
         tokio::spawn(async move {
             let (stream, _) = listener.accept().await.unwrap();
             let ws = tokio_tungstenite::accept_async(stream).await.unwrap();
-            run(ws, kp, ps, st, bc, ctx, false, None).await;
+            run(ws, kp, ps, st, bc, ctx, false, None, None).await;
         });
 
         let url = format!("ws://{}", addr);
@@ -564,7 +582,7 @@ mod tests {
         tokio::spawn(async move {
             let (stream, _) = listener.accept().await.unwrap();
             let ws = tokio_tungstenite::accept_async(stream).await.unwrap();
-            run(ws, kp, ps, st, bc, ctx, false, None).await;
+            run(ws, kp, ps, st, bc, ctx, false, None, None).await;
         });
 
         let url = format!("ws://{}", addr);
@@ -629,7 +647,7 @@ mod tests {
         tokio::spawn(async move {
             let (stream, _) = listener.accept().await.unwrap();
             let ws = tokio_tungstenite::accept_async(stream).await.unwrap();
-            run(ws, kp, ps, st, bc, ctx, false, None).await;
+            run(ws, kp, ps, st, bc, ctx, false, None, None).await;
         });
 
         let url = format!("ws://{}", addr);

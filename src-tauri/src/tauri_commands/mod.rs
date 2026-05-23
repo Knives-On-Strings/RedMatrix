@@ -7,9 +7,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{oneshot, Mutex, RwLock};
 
+use std::path::PathBuf;
 use tauri::{Emitter, State};
 
 use crate::config;
+use crate::server;
+use crate::server::broadcast::BroadcastHandle;
 use crate::server::messages::ClientMessage;
 use crate::server::mock_devices;
 use crate::server::mock_handler;
@@ -23,6 +26,10 @@ pub struct AppState {
     /// oneshot::Sender here. When the UI calls approve_pairing, we
     /// pop the sender and respond.
     pub pending_pairings: Arc<Mutex<HashMap<String, oneshot::Sender<bool>>>>,
+    pub server_fingerprint: String,
+    pub server_port: u16,
+    pub paired_devices_path: PathBuf,
+    pub broadcast_handle: BroadcastHandle,
 }
 
 /// Get the current device state as JSON.
@@ -45,6 +52,16 @@ pub async fn send_command(
         serde_json::from_str(&command).map_err(|e| format!("Invalid command JSON: {}", e))?;
 
     let changes = mock_handler::handle_command(&app_state.device_state, msg).await?;
+
+    // Broadcast change to remote WebSocket clients
+    if !changes.is_empty() {
+        let update_msg = server::messages::ServerMessage::StateUpdate {
+            changes: changes.clone().into_iter().collect(),
+        };
+        if let Ok(json) = serde_json::to_string(&update_msg) {
+            let _ = app_state.broadcast_handle.send_update(json);
+        }
+    }
 
     // Emit the updated full state to the frontend via Tauri event
     let new_state = app_state.device_state.read().await.clone();
@@ -121,10 +138,17 @@ pub async fn approve_pairing(
 
 /// Get server connection info for remote pairing (fingerprint, port, IPs).
 #[tauri::command]
-pub fn get_server_info() -> serde_json::Value {
-    // Generate a mock fingerprint for now — real one comes from ServerKeypair
-    // when the WebSocket server is running.
-    let fingerprint = "A3F2-9B17-D4C8"; // placeholder
+pub fn get_server_info(app_state: State<'_, AppState>) -> serde_json::Value {
+    let fingerprint = &app_state.server_fingerprint;
+    let port = app_state.server_port;
+
+    // Load paired device store to count paired devices
+    let paired_store = server::crypto::PairedDeviceStore::load(app_state.paired_devices_path.clone())
+        .unwrap_or_else(|_| server::crypto::PairedDeviceStore::new(app_state.paired_devices_path.clone()));
+    let paired_count = paired_store.devices().len();
+
+    // Connection count = active subscribers to the broadcast channel
+    let connected_count = app_state.broadcast_handle.connected_count();
 
     // Get local IP addresses
     let mut ips: Vec<String> = Vec::new();
@@ -141,10 +165,10 @@ pub fn get_server_info() -> serde_json::Value {
 
     serde_json::json!({
         "fingerprint": fingerprint,
-        "port": 18120,
+        "port": port,
         "ips": ips,
-        "paired_count": 0,
-        "connected_count": 0,
+        "paired_count": paired_count,
+        "connected_count": connected_count,
     })
 }
 

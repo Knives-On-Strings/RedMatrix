@@ -26,6 +26,8 @@ pub async fn listen(
     command_tx: mpsc::Sender<ClientCommand>,
     mut shutdown_rx: oneshot::Receiver<()>,
     require_pairing: bool,
+    app_handle: Option<tauri::AppHandle>,
+    pending_pairings: Option<session::PendingPairings>,
 ) {
     let semaphore = Arc::new(Semaphore::new(MAX_CONNECTIONS));
 
@@ -47,12 +49,25 @@ pub async fn listen(
                         let st = state.clone();
                         let bc = broadcast.clone();
                         let ctx = command_tx.clone();
+                        let app_h = app_handle.clone();
+                        let pend_p = pending_pairings.clone();
 
                         tokio::spawn(async move {
                             match accept_async(stream).await {
                                 Ok(ws_stream) => {
                                     log::info!("Client connected: {}", addr);
-                                    session::run(ws_stream, kp, ps, st, bc, ctx, require_pairing, None).await;
+                                    session::run(
+                                        ws_stream,
+                                        kp,
+                                        ps,
+                                        st,
+                                        bc,
+                                        ctx,
+                                        require_pairing,
+                                        pend_p,
+                                        app_h,
+                                    )
+                                    .await;
                                     log::info!("Client disconnected: {}", addr);
                                 }
                                 Err(e) => {
@@ -107,6 +122,8 @@ mod tests {
             command_tx,
             shutdown_rx,
             false,
+            None,
+            None,
         ));
 
         // Connect as client
@@ -145,6 +162,8 @@ mod tests {
             command_tx,
             shutdown_rx,
             false,
+            None,
+            None,
         ));
 
         // Send shutdown

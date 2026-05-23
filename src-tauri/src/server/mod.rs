@@ -54,7 +54,8 @@ impl Default for ServerConfig {
 pub struct ServerHandle {
     pub shutdown_tx: Option<oneshot::Sender<()>>,
     pub state: Arc<RwLock<state::DeviceState>>,
-    pub command_rx: mpsc::Receiver<session::ClientCommand>,
+    pub command_rx: Option<tokio::sync::mpsc::Receiver<session::ClientCommand>>,
+    pub broadcast: broadcast::BroadcastHandle,
     /// Keep the mDNS daemon alive for the lifetime of the server.
     _mdns_daemon: Option<mdns_sd::ServiceDaemon>,
     /// Send `true` to stop the meter task. Kept alive so callers can signal shutdown.
@@ -79,7 +80,12 @@ pub enum ServerError {
 /// Start the WebSocket server: bind, spawn listener, advertise via mDNS,
 /// and kick off a mock meter task. Returns a [`ServerHandle`] for the caller
 /// to hold (dropping the handle's `shutdown_tx` stops the listener).
-pub async fn start_server(config: ServerConfig) -> Result<ServerHandle, ServerError> {
+pub async fn start_server(
+    config: ServerConfig,
+    device_state: Arc<RwLock<state::DeviceState>>,
+    app_handle: Option<tauri::AppHandle>,
+    pending_pairings: Option<session::PendingPairings>,
+) -> Result<ServerHandle, ServerError> {
     // 1. Load or generate server keypair
     let keypair = if config.keypair_path.exists() {
         crypto::ServerKeypair::load(&config.keypair_path)?
@@ -99,9 +105,8 @@ pub async fn start_server(config: ServerConfig) -> Result<ServerHandle, ServerEr
         .unwrap_or_else(|_| crypto::PairedDeviceStore::new(config.paired_devices_path));
     let paired_store = Arc::new(RwLock::new(paired_store));
 
-    // 3. Create device state (mock for now — real USB bridge comes later)
-    let device_state = state::DeviceState::mock_18i20_gen3();
-    let state = Arc::new(RwLock::new(device_state));
+    // 3. Create device state
+    let state = device_state;
 
     // 4. Create broadcast channels
     let broadcast_handle = broadcast::BroadcastHandle::new();
@@ -135,6 +140,8 @@ pub async fn start_server(config: ServerConfig) -> Result<ServerHandle, ServerEr
         command_tx,
         shutdown_rx,
         require_pairing,
+        app_handle,
+        pending_pairings,
     ));
 
     // 8. Spawn mDNS (best-effort, don't fail if it can't start)
@@ -187,7 +194,8 @@ pub async fn start_server(config: ServerConfig) -> Result<ServerHandle, ServerEr
     Ok(ServerHandle {
         shutdown_tx: Some(shutdown_tx),
         state,
-        command_rx,
+        command_rx: Some(command_rx),
+        broadcast: broadcast_handle,
         _mdns_daemon: mdns_daemon,
         meter_stop_tx: Some(meter_stop_tx),
     })
@@ -220,7 +228,8 @@ mod tests {
             ..Default::default()
         };
 
-        let handle = start_server(config).await;
+        let state = Arc::new(RwLock::new(state::DeviceState::mock_18i20_gen3()));
+        let handle = start_server(config, state, None, None).await;
         assert!(handle.is_ok());
 
         let mut handle = handle.unwrap();
@@ -239,7 +248,8 @@ mod tests {
             ..Default::default()
         };
 
-        let mut handle = start_server(config).await.unwrap();
+        let state = Arc::new(RwLock::new(state::DeviceState::mock_18i20_gen3()));
+        let mut handle = start_server(config, state, None, None).await.unwrap();
 
         // Give the server a moment to start
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;

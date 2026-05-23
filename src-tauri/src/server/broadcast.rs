@@ -68,6 +68,10 @@ impl BroadcastHandle {
         }
     }
 
+    pub fn connected_count(&self) -> usize {
+        self.update_tx.receiver_count()
+    }
+
     pub fn send_update(
         &self,
         msg: String,
