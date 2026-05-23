@@ -88,11 +88,11 @@ See [`specs/01-ARCHITECTURE.md`](specs/01-ARCHITECTURE.md) for full details.
 |-------|-------------|--------|
 | 0 | USB access validation | **Complete** ✅ — protocol confirmed against real 18i20 hardware |
 | 1 | Protocol library in Rust (TDD) | **Complete** ✅ — command serialization, mixer encoding, all 15 device configs (159 Rust tests) |
-| 2 | Desktop MVP | **In progress** — WebSocket server, full UI with mock mode, Tauri IPC, config persistence |
-| 3 | Multi-device support + polish | Not started |
+| 2 | Desktop MVP & Hotplug Sync | **Complete** ✅ — WebSocket server, full UI with mock/real USB support, hotplugging, and hardware button sync |
+| 3 | Real Metering & Driver Guides | **Complete** ✅ — live `CMD_GET_METER` hardware streaming at 20Hz, binary WebSocket meter broadcast, and interactive driver setup guides |
 | 4 | iPad remote app | Not started |
 
-**Next milestone:** Real USB transport (dedicated thread for blocking libusb I/O, notification polling, 20Hz metering). Design spec complete, implementation pending Windows driver coexistence solution.
+**Next milestone:** Encrypted LAN WebSocket client app development for iPad.
 
 The detailed plan is in [`specs/05-BACKLOG.md`](specs/05-BACKLOG.md).
 
