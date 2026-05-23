@@ -22,3 +22,6 @@ Thumbs.db
 
 # Third-party DLLs (download locally, don't commit)
 scripts/*.dll
+
+# Local specifications / kernel source reference
+specs/mixer_scarlett2.c
