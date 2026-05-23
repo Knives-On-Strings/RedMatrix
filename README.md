@@ -137,6 +137,30 @@ cd src-tauri && cargo test  # 159 Rust tests
 cargo tauri dev
 ```
 
+## Running with Real USB Hardware
+
+To run RedMatrix and connect to your physical Focusrite Scarlett or Clarett interface:
+
+### Windows (Driver setup required)
+By default, the official Focusrite USB driver locks the vendor-specific control interface. RedMatrix requires a user-space driver association to communicate with it:
+1. **Zadig (Recommended)**: Download [Zadig](https://zadig.akeo.ie). Connect your interface, open Zadig, select **Options** -> **List All Devices**, find your device's control interface (e.g. `Scarlett 18i20 (Interface 3)` or `Interface 4` — Class `0xFF`), and replace the driver with **WinUSB**. *(Your standard audio playback and recording will remain fully active!)*
+2. **UsbDk (Alternative)**: Download and install the [UsbDk installer](https://github.com/daynix/UsbDk/releases). This allows RedMatrix to claim the device dynamically without replacing the driver permanently.
+
+RedMatrix provides an interactive step-by-step driver setup wizard directly inside the **Settings** tab to guide you.
+
+### macOS
+No driver setup is required! RedMatrix will auto-detect and connect to your device immediately on launch.
+
+### Linux
+Create a custom udev rule file at `/etc/udev/rules.d/50-focusrite.rules` with the following content to allow non-root users access to the device:
+```udev
+SUBSYSTEMS=="usb", ATTRS{idVendor}=="1235", MODE="0666"
+```
+Then reload your udev rules:
+```bash
+sudo udevadm control --reload-rules && sudo udevadm trigger
+```
+
 ## Mock Mode (No Hardware Required)
 
 RedMatrix runs in **mock mode** when no Scarlett device is connected. This lets you explore the full UI, test all controls, and develop against the WebSocket API without any audio hardware.
