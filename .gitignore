@@ -25,3 +25,6 @@ scripts/*.dll
 
 # Local specifications / kernel source reference
 specs/mixer_scarlett2.c
+
+# Local releases
+release/
