@@ -52,7 +52,7 @@ TDD: every command and parser gets a test BEFORE implementation.
 - [ ] mDNS advertisement (mdns-sd)
 - [ ] Device detection and connection UI
 - [ ] System tray support for headless/minimised mode
-- [ ] Build and test on both Windows and macOS
+- [ ] Build and test on Windows
 
 ### Overview tab
 - [ ] Front panel LED mirror strip (no VU meters — those are in input section)
@@ -187,6 +187,7 @@ TDD: every command and parser gets a test BEFORE implementation.
 
 - [ ] Reach out to Geoffrey Bennett for advice
 - [ ] Investigate Gen 4 FCP protocol support
+- [ ] macOS/Linux driver implementation and user-space permissions/udev setup (post-v1)
 - [ ] **MIDI controller mapping** — Map any MIDI CC input to mixer controls. Architecture:
   - **MIDI input via `midir` crate** — enumerate and listen to all MIDI ports (USB controllers via OS MIDI API + Scarlett's DIN MIDI ports via USB-MIDI Interface 5)
   - **Mapping table** — `{ midi_channel, cc_number } → { action, bus, channel }`. Actions: `bus_master`, `channel_gain`, `mute_toggle`, `solo_toggle`, `dim_toggle`, `mute_toggle_master`, `talkback_toggle`

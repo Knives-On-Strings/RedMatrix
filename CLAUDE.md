@@ -6,7 +6,7 @@
 
 A [Knives on Strings](https://github.com/Knives-On-Strings) product.
 
-An open-source Windows/macOS app (GPL-3.0) that replaces Focusrite Control for Scarlett Gen 2/3 and Clarett USB/+ interfaces, plus a commercial iPad companion app for remote control over LAN.
+An open-source Windows app (GPL-3.0, macOS/Linux planned post-v1) that replaces Focusrite Control for Scarlett Gen 2/3 and Clarett USB/+ interfaces, plus a commercial iPad companion app for remote control over LAN.
 
 **The Rust backend is written by Claude Code.** Human reviews, tests, and directs. The React frontend and Swift iPad wrapper are also Claude Code assisted.
 
@@ -145,7 +145,7 @@ For devices you don't own, use these approaches:
 
 | Component | Technology |
 |-----------|-----------|
-| Desktop app | Tauri 2.x (Rust backend + native webview), Windows + macOS |
+| Desktop app | Tauri 2.x (Rust backend + native webview), Windows (macOS/Linux post-v1) |
 | USB | rusb (Rust libusb bindings), cross-platform |
 | Protocol | Rust (in src-tauri/) |
 | WebSocket server | tokio-tungstenite (Rust) |

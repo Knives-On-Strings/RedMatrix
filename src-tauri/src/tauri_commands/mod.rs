@@ -30,6 +30,7 @@ pub struct AppState {
     pub server_port: u16,
     pub paired_devices_path: PathBuf,
     pub broadcast_handle: BroadcastHandle,
+    pub active_usb_device: Arc<Mutex<Option<crate::usb::ConnectedDevice>>>,
 }
 
 /// Get the current device state as JSON.
@@ -51,7 +52,20 @@ pub async fn send_command(
     let msg: ClientMessage =
         serde_json::from_str(&command).map_err(|e| format!("Invalid command JSON: {}", e))?;
 
-    let changes = mock_handler::handle_command(&app_state.device_state, msg).await?;
+    let changes = mock_handler::handle_command(&app_state.device_state, msg.clone()).await?;
+
+    // If a physical USB device is connected, dispatch to hardware
+    {
+        let mut active_lock = app_state.active_usb_device.lock().await;
+        if let Some(dev) = active_lock.as_mut() {
+            let transport = crate::usb::RusbTransport::new(dev.handle.clone(), dev.interface);
+            let mut runner = crate::protocol::commands::CommandRunner::new(transport);
+            let state_read = app_state.device_state.read().await;
+            if let Err(e) = crate::usb::writes::dispatch_command(&mut runner, dev.config, &state_read, &msg) {
+                log::error!("Failed to write command to USB hardware: {}", e);
+            }
+        }
+    }
 
     // Broadcast change to remote WebSocket clients
     if !changes.is_empty() {

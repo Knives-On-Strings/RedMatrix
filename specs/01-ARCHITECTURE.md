@@ -59,7 +59,7 @@ The server does NOT serve a web UI. The React client is bundled inside native ap
 
 | Product | Shell | Client Bundling | License |
 |---------|-------|----------------|---------|
-| **RedMatrix** (Windows + macOS) | Tauri (Rust + native webview) | React client compiled into the app binary | GPL-3.0 |
+| **RedMatrix** (Windows only initially) | Tauri (Rust + native webview) | React client compiled into the app binary | GPL-3.0 | (Linux + macOS post-v1) |
 | **RedMatrix Remote** (iPad) | Native Swift app with WKWebView | React client bundled in the app | Proprietary, paid ($5–10) |
 
 ### Why Tauri over Electron
@@ -171,8 +171,8 @@ Remote clients authenticate via a generated keypair system. No passwords or PINs
 
 | Component | Technology | Notes |
 |-----------|-----------|-------|
-| Desktop app shell | Tauri 2.x | Rust backend + native webview, ~5MB binary, Windows + macOS |
-| USB transport | `rusb` (Rust libusb bindings) | Cross-platform (Windows + macOS) |
+| Desktop app shell | Tauri 2.x | Rust backend + native webview, ~5MB binary, Windows (Linux + macOS post-v1) |
+| USB transport | `rusb` (Rust libusb bindings) | Windows initially (Linux + macOS post-v1) |
 | Protocol layer | Rust | Command encode/decode, state management |
 | WebSocket server | `tokio-tungstenite` (Rust) | For remote iPad clients |
 | Frontend | React + TypeScript + Vite | Shared between desktop and iPad |

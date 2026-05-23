@@ -9,7 +9,7 @@ An open-source Windows alternative to Focusrite Control for the Scarlett 18i20 G
 ## Products
 
 ### RedMatrix (Desktop)
-- **Platform:** Windows + macOS
+- **Platform:** Windows (Linux + macOS post-v1)
 - **License:** GPL-3.0
 - **Source:** Open source
 - Directly controls Scarlett Gen 2/3 and Clarett USB/+ interfaces over USB

@@ -54,8 +54,8 @@ Rust backend will be written by Claude Code. No prior Rust expertise required. C
 ### 5. iPad app — Swift + WKWebView
 Native Swift app wrapping the shared React client in WKWebView. Gives native Keychain for crypto key storage, camera access for QR pairing, and proper App Store presence.
 
-### 6. macOS support — yes
-Tauri is cross-platform. Many Scarlett users are on Mac, and Mac users also lost the iOS remote when Focusrite discontinued it. Target Windows and macOS from v1. The Rust USB layer uses `rusb` which wraps libusb on both platforms. The React frontend is platform-agnostic.
+### 6. macOS support — deferred to post-v1
+Tauri is cross-platform. Many Scarlett users are on Mac, and Mac users also lost the iOS remote when Focusrite discontinued it. However, to focus development resources and deliver a solid Windows/Linux MVP first, macOS support is deferred to post-v1. The Rust USB layer uses `rusb` which wraps libusb on both platforms, so the port should be straightforward once Windows/Linux are fully functional.
 
 ### 7. MIDI — nice to have, not required
 The 18i20 has MIDI I/O but it's standard USB MIDI class, not part of the Scarlett2 protocol. If mirroring the MIDI activity LED in the front panel display is easy (it may come through the notification system), include it. Don't build MIDI routing features — that's the OS's job.

@@ -3,6 +3,9 @@
 //! Handles device auto-detection, interface claiming, control transfers for protocol
 //! commands, and asynchronous notification polling on the interrupt endpoint.
 
+pub mod queries;
+pub mod writes;
+
 use std::sync::Arc;
 use std::time::Duration;
 use rusb::{DeviceHandle, GlobalContext};
@@ -19,11 +22,28 @@ use crate::server::state::DeviceState;
 pub struct RusbTransport {
     handle: Arc<DeviceHandle<GlobalContext>>,
     interface: u8,
+    timeout: Duration,
 }
 
 impl RusbTransport {
     pub fn new(handle: Arc<DeviceHandle<GlobalContext>>, interface: u8) -> Self {
-        Self { handle, interface }
+        Self {
+            handle,
+            interface,
+            timeout: Duration::from_millis(5000),
+        }
+    }
+
+    pub fn with_timeout(
+        handle: Arc<DeviceHandle<GlobalContext>>,
+        interface: u8,
+        timeout: Duration,
+    ) -> Self {
+        Self {
+            handle,
+            interface,
+            timeout,
+        }
     }
 }
 
@@ -36,8 +56,14 @@ impl UsbTransport for RusbTransport {
             0,    // wValue
             self.interface as u16, // wIndex
             data,
-            Duration::from_millis(5000),
-        ).map_err(|e| TransportError::TransferFailed(e.to_string()))?;
+            self.timeout,
+        ).map_err(|e| {
+            if e == rusb::Error::Timeout {
+                TransportError::Timeout
+            } else {
+                TransportError::TransferFailed(e.to_string())
+            }
+        })?;
 
         if written != data.len() {
             return Err(TransportError::TransferFailed(format!(
@@ -56,8 +82,14 @@ impl UsbTransport for RusbTransport {
             0,    // wValue
             self.interface as u16, // wIndex
             &mut buf,
-            Duration::from_millis(5000),
-        ).map_err(|e| TransportError::TransferFailed(e.to_string()))?;
+            self.timeout,
+        ).map_err(|e| {
+            if e == rusb::Error::Timeout {
+                TransportError::Timeout
+            } else {
+                TransportError::TransferFailed(e.to_string())
+            }
+        })?;
 
         buf.truncate(read);
         Ok(buf)
@@ -144,11 +176,21 @@ fn find_control_interface(device: &rusb::Device<GlobalContext>) -> Option<u8> {
 }
 
 /// Spawn the background blocking task to read interrupt notifications from endpoint 0x83.
+///
+/// When a notification bitmask arrives, this loop:
+/// 1. Builds a second `RusbTransport` + `CommandRunner` to query only the changed state
+/// 2. Acquires the `DeviceState` write lock and applies the changes
+/// 3. Broadcasts the changes to WebSocket clients and the local Tauri webview
+///
+/// On device disconnection (`NoDevice` / `Io` error), the loop:
+/// - Clears `active_usb_device` to `None` (triggers hotplug poller to rescan)
+/// - Broadcasts `DeviceDisconnected` to all clients
 pub fn spawn_interrupt_loop(
     handle: Arc<DeviceHandle<GlobalContext>>,
-    _device_state: Arc<RwLock<DeviceState>>,
+    device_state: Arc<RwLock<DeviceState>>,
     broadcast: BroadcastHandle,
     app_handle: Option<tauri::AppHandle>,
+    active_usb_device: Arc<tokio::sync::Mutex<Option<ConnectedDevice>>>,
 ) {
     tokio::task::spawn_blocking(move || {
         let mut buf = [0u8; 64];
@@ -162,9 +204,48 @@ pub fn spawn_interrupt_loop(
                         let notification = Notification::from_mask(mask);
                         if !notification.is_empty() {
                             log::info!("Hardware notification bitmask: {:#010x} -> {:?}", mask, notification);
-                            // Sync changes to shared state when hardware buttons are pushed
-                            // Note: Real state queries will update fields and broadcast
-                            // incremental changes.
+
+                            // Read the device config from the active_usb_device handle
+                            let rt = tokio::runtime::Handle::current();
+                            let config_opt: Option<&'static crate::protocol::devices::DeviceConfig> = rt.block_on(async {
+                                let lock = active_usb_device.lock().await;
+                                lock.as_ref().map(|dev| dev.config)
+                            });
+
+                            if let Some(config) = config_opt {
+                                // Build a transport for querying
+                                let transport = RusbTransport::new(handle.clone(), 
+                                    rt.block_on(async {
+                                        let lock = active_usb_device.lock().await;
+                                        lock.as_ref().map(|d| d.interface).unwrap_or(3)
+                                    })
+                                );
+                                let mut runner = crate::protocol::commands::CommandRunner::new(transport);
+
+                                // Query the changed state and update DeviceState
+                                let changes = rt.block_on(async {
+                                    let mut state = device_state.write().await;
+                                    queries::query_notification_updates(&mut runner, config, &mut state, &notification)
+                                });
+
+                                if !changes.is_empty() {
+                                    // Broadcast to WebSocket clients
+                                    let update_msg = crate::server::messages::ServerMessage::StateUpdate {
+                                        changes: changes.into_iter().collect(),
+                                    };
+                                    if let Ok(json) = serde_json::to_string(&update_msg) {
+                                        let _ = broadcast.send_update(json);
+                                    }
+
+                                    // Emit to local Tauri webview
+                                    if let Some(ref ah) = app_handle {
+                                        let _ = rt.block_on(async {
+                                            let state = device_state.read().await;
+                                            ah.emit("state_update", &*state)
+                                        });
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -173,6 +254,13 @@ pub fn spawn_interrupt_loop(
                 }
                 Err(rusb::Error::NoDevice) | Err(rusb::Error::Io) => {
                     log::warn!("USB device disconnected from interrupt loop");
+
+                    // Clear the active device handle so hotplug poller rescans
+                    let rt = tokio::runtime::Handle::current();
+                    rt.block_on(async {
+                        let mut lock = active_usb_device.lock().await;
+                        *lock = None;
+                    });
 
                     // Broadcast disconnect to WebSocket clients
                     let disconnect_msg = crate::server::messages::ServerMessage::DeviceDisconnected;

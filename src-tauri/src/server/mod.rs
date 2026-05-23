@@ -160,44 +160,13 @@ pub async fn start_server(
         }
     };
 
-    // 9. Spawn mock meter task (generates fake meter data at 20 Hz)
-    // Capped at 20Hz to reduce USB/CPU overhead when running with real hardware.
-    // Client-side CSS easing smooths the visual to 60fps.
-    let meter_broadcast = broadcast_handle.clone();
-    let (meter_stop_tx, mut meter_stop_rx) = tokio::sync::watch::channel(false);
-    tokio::spawn(async move {
-        let mut interval = tokio::time::interval(std::time::Duration::from_millis(50));
-        loop {
-            tokio::select! {
-                _ = interval.tick() => {
-                    // Generate fake meter data: 65 channels of a quiet signal
-                    let meter_data: Vec<u8> = (0..65)
-                        .flat_map(|_| {
-                            let val: f32 = 0.1;
-                            val.to_le_bytes().to_vec()
-                        })
-                        .collect();
-                    // Stop if no receivers remain
-                    if meter_broadcast.send_meters(meter_data).is_err() {
-                        break;
-                    }
-                }
-                _ = meter_stop_rx.changed() => {
-                    if *meter_stop_rx.borrow() {
-                        break;
-                    }
-                }
-            }
-        }
-    });
-
     Ok(ServerHandle {
         shutdown_tx: Some(shutdown_tx),
         state,
         command_rx: Some(command_rx),
         broadcast: broadcast_handle,
         _mdns_daemon: mdns_daemon,
-        meter_stop_tx: Some(meter_stop_tx),
+        meter_stop_tx: None,
     })
 }
 

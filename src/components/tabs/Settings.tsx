@@ -4,6 +4,7 @@ import { useDevice } from "../../hooks/useDevice";
 import { THEMES, type Theme } from "../../themes";
 import type { ClockSource } from "../../types";
 import QrCode from "../QrCode";
+import DriverSetup from "./DriverSetup";
 
 function SettingRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -157,6 +158,9 @@ export default function Settings() {
               </p>
             </div>
           </SettingGroup>
+          <div className="mt-6">
+            <DriverSetup />
+          </div>
         </div>
 
         {/* Right column */}
