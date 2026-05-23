@@ -87,6 +87,13 @@ When implementing protocol commands, **always cross-reference the Linux kernel d
 
 The React client in `src/` is dual-licensed. The iPad app wrapper lives in a separate private repository and is never included in the public open-source release.
 
+## Versioning Policy
+
+We follow semantic versioning (`major.minor.patch`) with the following guidelines:
+- **Major**: Major releases or breaking architectural changes.
+- **Minor**: Incremental version bumps when **new capabilities/features** are added (e.g., adding hotplug sync, metering, setup guides).
+- **Patch**: Version bumps when fixing bugs, tweaking existing code, or implementing minor adjustments against existing features.
+
 ## Target Device
 
 Primary: Focusrite Scarlett 18i20 3rd Generation (USB VID `0x1235`, PID `0x8215`)
