@@ -1,6 +1,6 @@
 [package]
 name = "redmatrix"
-version = "0.1.0"
+version = "0.5.0"
 description = "Open-source Focusrite Scarlett controller"
 authors = ["Knives on Strings"]
 license = "GPL-3.0"

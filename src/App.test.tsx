@@ -95,6 +95,6 @@ describe("App", () => {
 
   it("renders the footer", () => {
     render(<App />);
-    expect(screen.getByText("RedMatrix v0.1.0-dev")).toBeDefined();
+    expect(screen.getByText("RedMatrix v0.5.0-dev")).toBeDefined();
   });
 });

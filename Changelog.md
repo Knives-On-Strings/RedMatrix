@@ -4,6 +4,8 @@ All notable changes to the RedMatrix Focusrite Control alternative will be docum
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-05-23
+
 ### Added
 - Created `RusbTransport` utilizing class-interface control transfers to communicate directly with Focusrite Scarlett/Clarett hardware over USB.
 - Implemented automatic control interface detection for USB devices by scanning descriptor class codes for `0xFF` (Vendor-specific).
