@@ -127,9 +127,13 @@ fn build_state(config: &DeviceConfig) -> DeviceState {
         });
     }
 
-    // ── S/PDIF mode ────────────────────────────────────────────
     let spdif_mode = if !config.spdif_modes.is_empty() {
-        config.spdif_modes[0].name.to_lowercase().replace(' ', "_").replace('/', "_")
+        match config.spdif_modes[0].name {
+            "S/PDIF RCA" | "RCA" => "spdif_rca".to_string(),
+            "S/PDIF Optical" | "Optical" => "spdif_optical".to_string(),
+            "Dual ADAT" => "dual_adat".to_string(),
+            other => other.to_string(),
+        }
     } else {
         "none".to_string()
     };
@@ -152,6 +156,7 @@ fn build_state(config: &DeviceConfig) -> DeviceState {
             series: config.series.to_lowercase().replace(' ', ""),
             firmware_version: 1644,
             serial: "MOCK000000".to_string(),
+            is_usb: false,
         },
         sample_rate: 48000,
         sync_status: SyncStatus::Locked,
@@ -198,6 +203,9 @@ fn build_state(config: &DeviceConfig) -> DeviceState {
         inputs,
         mixer: MixerState { gains, soloed },
         routing,
+        sub_assignments: vec![0, 1, 2, 3],
+        bus_masters: vec![0.0; 12],
+        master_db: 0.0,
     }
 }
 

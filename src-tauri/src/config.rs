@@ -18,6 +18,12 @@ pub struct UserConfig {
     #[serde(default)]
     pub input_stereo_pairs: Vec<InputStereoPairConfig>,
     pub bus_names: HashMap<String, String>,
+    #[serde(default = "default_sub_assignments")]
+    pub sub_assignments: Vec<u32>,
+    #[serde(default = "default_bus_masters")]
+    pub bus_masters: Vec<f64>,
+    #[serde(default = "default_master_db")]
+    pub master_db: f64,
 }
 
 /// Custom channel labels, keyed by "{type}_{index}" e.g. "analogue_0".
@@ -46,6 +52,16 @@ pub struct InputStereoPairConfig {
     pub name: String,
     pub linked: bool,
     pub input_type: String, // "analogue", "spdif", "adat"
+}
+
+fn default_sub_assignments() -> Vec<u32> {
+    vec![0, 1, 2, 3]
+}
+fn default_bus_masters() -> Vec<f64> {
+    vec![0.0; 12]
+}
+fn default_master_db() -> f64 {
+    0.0
 }
 
 /// Get the config directory path: `~/knivesonstrings/redmatrix/`.
@@ -123,6 +139,9 @@ mod tests {
             }],
             input_stereo_pairs: vec![],
             bus_names: HashMap::from([("0".to_string(), "Drums Bus".to_string())]),
+            sub_assignments: vec![0, 1, 2, 3],
+            bus_masters: vec![0.0; 12],
+            master_db: 0.0,
         };
 
         save_config(&path, &config).expect("save should succeed");

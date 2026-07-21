@@ -58,7 +58,12 @@ pub async fn send_command(
     {
         let mut active_lock = app_state.active_usb_device.lock().await;
         if let Some(dev) = active_lock.as_mut() {
-            let transport = crate::usb::RusbTransport::new(dev.handle.clone(), dev.interface);
+            let transport = crate::usb::RusbTransport::new(
+                dev.handle.clone(),
+                dev.interface,
+                dev.clock_source_id,
+                dev.clock_selector_id,
+            );
             let mut runner = crate::protocol::commands::CommandRunner::new(transport);
             let state_read = app_state.device_state.read().await;
             if let Err(e) = crate::usb::writes::dispatch_command(&mut runner, dev.config, &state_read, &msg) {

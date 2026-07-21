@@ -240,6 +240,52 @@ pub async fn handle_command(
                 }
             }
         }
+        ClientMessage::SetSubAssignment { payload } => {
+            let idx = payload.sub_index as usize;
+            if idx >= state.sub_assignments.len() {
+                state.sub_assignments.resize(idx + 1, 0);
+            }
+            state.sub_assignments[idx] = payload.mix;
+            changes.insert(
+                format!("sub_assignments.{}", payload.sub_index),
+                serde_json::json!(payload.mix),
+            );
+        }
+        ClientMessage::SetBusMaster { payload } => {
+            let idx = payload.mix as usize;
+            if idx >= state.bus_masters.len() {
+                state.bus_masters.resize(idx + 1, 0.0);
+            }
+            state.bus_masters[idx] = payload.gain_db;
+            changes.insert(
+                format!("bus_masters.{}", payload.mix),
+                serde_json::json!(payload.gain_db),
+            );
+        }
+        ClientMessage::SetMasterDb { payload } => {
+            state.master_db = payload.gain_db;
+            changes.insert(
+                "master_db".to_string(),
+                serde_json::json!(payload.gain_db),
+            );
+        }
+        ClientMessage::InitVcaState { payload } => {
+            state.sub_assignments = payload.sub_assignments.clone();
+            state.bus_masters = payload.bus_masters.clone();
+            state.master_db = payload.master_db;
+            changes.insert(
+                "sub_assignments".to_string(),
+                serde_json::json!(payload.sub_assignments),
+            );
+            changes.insert(
+                "bus_masters".to_string(),
+                serde_json::json!(payload.bus_masters),
+            );
+            changes.insert(
+                "master_db".to_string(),
+                serde_json::json!(payload.master_db),
+            );
+        }
         ClientMessage::Ping | ClientMessage::ClientHello { .. } => {}
     }
 
@@ -427,5 +473,55 @@ mod tests {
         let state = make_test_state();
         let changes = handle_command(&state, ClientMessage::Ping).await.unwrap();
         assert!(changes.is_empty());
+    }
+
+    #[tokio::test]
+    async fn vca_commands_mutate_state() {
+        let state = make_test_state();
+
+        // 1. SetSubAssignment
+        let msg = ClientMessage::SetSubAssignment {
+            payload: SubAssignmentPayload {
+                sub_index: 2,
+                mix: 5,
+            },
+        };
+        let changes = handle_command(&state, msg).await.unwrap();
+        assert_eq!(changes.get("sub_assignments.2"), Some(&serde_json::json!(5)));
+        assert_eq!(state.read().await.sub_assignments[2], 5);
+
+        // 2. SetBusMaster
+        let msg = ClientMessage::SetBusMaster {
+            payload: BusMasterPayload {
+                mix: 5,
+                gain_db: -10.0,
+            },
+        };
+        let changes = handle_command(&state, msg).await.unwrap();
+        assert_eq!(changes.get("bus_masters.5"), Some(&serde_json::json!(-10.0)));
+        assert_eq!(state.read().await.bus_masters[5], -10.0);
+
+        // 3. SetMasterDb
+        let msg = ClientMessage::SetMasterDb {
+            payload: MasterDbPayload {
+                gain_db: -6.0,
+            },
+        };
+        let changes = handle_command(&state, msg).await.unwrap();
+        assert_eq!(changes.get("master_db"), Some(&serde_json::json!(-6.0)));
+        assert_eq!(state.read().await.master_db, -6.0);
+
+        // 4. InitVcaState
+        let msg = ClientMessage::InitVcaState {
+            payload: VcaStatePayload {
+                sub_assignments: vec![1, 2, 3, 4],
+                bus_masters: vec![1.0; 12],
+                master_db: -3.0,
+            },
+        };
+        let _changes = handle_command(&state, msg).await.unwrap();
+        assert_eq!(state.read().await.sub_assignments, vec![1, 2, 3, 4]);
+        assert_eq!(state.read().await.bus_masters, vec![1.0; 12]);
+        assert_eq!(state.read().await.master_db, -3.0);
     }
 }

@@ -25,6 +25,9 @@ pub struct DeviceState {
     pub inputs: Vec<InputState>,
     pub mixer: MixerState,
     pub routing: Vec<RouteEntry>,
+    pub sub_assignments: Vec<u32>,
+    pub bus_masters: Vec<f64>,
+    pub master_db: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -34,6 +37,7 @@ pub struct DeviceInfo {
     pub series: String,
     pub firmware_version: u32,
     pub serial: String,
+    pub is_usb: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -214,6 +218,7 @@ impl DeviceState {
                 series: "gen3".to_string(),
                 firmware_version: 1644,
                 serial: "MOCK000000".to_string(),
+                is_usb: false,
             },
             sample_rate: 48000,
             sync_status: SyncStatus::Locked,
@@ -260,6 +265,9 @@ impl DeviceState {
             inputs,
             mixer: MixerState { gains, soloed },
             routing,
+            sub_assignments: vec![0, 1, 2, 3],
+            bus_masters: vec![0.0; 12],
+            master_db: 0.0,
         }
     }
 }

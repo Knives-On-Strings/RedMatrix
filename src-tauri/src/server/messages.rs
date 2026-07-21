@@ -100,6 +100,30 @@ pub struct SetRoutesBatchPayload {
     pub routes: Vec<RoutePayload>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SubAssignmentPayload {
+    pub sub_index: u32,
+    pub mix: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct BusMasterPayload {
+    pub mix: u32,
+    pub gain_db: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct MasterDbPayload {
+    pub gain_db: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct VcaStatePayload {
+    pub sub_assignments: Vec<u32>,
+    pub bus_masters: Vec<f64>,
+    pub master_db: f64,
+}
+
 // ── Server → Client messages ─────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -219,6 +243,18 @@ pub enum ClientMessage {
     /// Set multiple routes at once.
     SetRoutesBatch {
         payload: SetRoutesBatchPayload,
+    },
+    SetSubAssignment {
+        payload: SubAssignmentPayload,
+    },
+    SetBusMaster {
+        payload: BusMasterPayload,
+    },
+    SetMasterDb {
+        payload: MasterDbPayload,
+    },
+    InitVcaState {
+        payload: VcaStatePayload,
     },
 }
 

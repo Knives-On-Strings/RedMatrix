@@ -95,11 +95,23 @@ pub fn run() {
                     let config_for_query = usb_dev.config;
 
                     if let Some(mut new_state) = server::mock_devices::mock_state_for_pid(pid) {
-                        let transport = usb::RusbTransport::new(usb_handle_for_query.clone(), interface_for_query);
+                        new_state.device.is_usb = true;
+                        let transport = usb::RusbTransport::new(
+                            usb_handle_for_query.clone(),
+                            interface_for_query,
+                            usb_dev.clock_source_id,
+                            usb_dev.clock_selector_id,
+                        );
                         let mut executor = protocol::commands::CommandRunner::new(transport);
 
                         log::info!("Querying initial state from Focusrite hardware...");
-                        match usb::queries::query_initial_state(&mut executor, config_for_query, &mut new_state) {
+                        match usb::queries::query_initial_state(
+                            &mut executor,
+                            config_for_query,
+                            &mut new_state,
+                            usb_dev.clock_source_id,
+                            usb_dev.clock_selector_id,
+                        ) {
                             Ok(_) => {
                                 log::info!("Successfully retrieved initial hardware state!");
                             }
@@ -190,7 +202,12 @@ pub fn run() {
                                     {
                                         let mut active_lock = active_usb_runner.lock().await;
                                         if let Some(dev) = active_lock.as_mut() {
-                                            let transport = crate::usb::RusbTransport::new(dev.handle.clone(), dev.interface);
+                                            let transport = crate::usb::RusbTransport::new(
+                                                dev.handle.clone(),
+                                                dev.interface,
+                                                dev.clock_source_id,
+                                                dev.clock_selector_id,
+                                            );
                                             let mut runner = crate::protocol::commands::CommandRunner::new(transport);
                                             let state_read = runner_state.read().await;
                                             if let Err(e) = crate::usb::writes::dispatch_command(&mut runner, dev.config, &state_read, &cmd.message) {
@@ -244,6 +261,8 @@ pub fn run() {
                             let transport = crate::usb::RusbTransport::with_timeout(
                                 dev.handle.clone(),
                                 dev.interface,
+                                dev.clock_source_id,
+                                dev.clock_selector_id,
                                 std::time::Duration::from_millis(200),
                             );
                             let mut runner = crate::protocol::commands::CommandRunner::new(transport);
