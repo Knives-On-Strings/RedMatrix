@@ -15,7 +15,7 @@ export default function Footer() {
     <footer className="flex items-center justify-between px-4 py-1.5 bg-neutral-800 border-t border-neutral-700 text-[10px] text-neutral-500">
       <span>{deviceInfo}</span>
       <span>{portSummary}</span>
-      <span>RedMatrix v0.5.0-dev</span>
+      <span>RedMatrix v0.7.0-dev</span>
     </footer>
   );
 }

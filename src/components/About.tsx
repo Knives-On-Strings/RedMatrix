@@ -25,7 +25,7 @@ export default function About({ onClose }: AboutProps) {
           <p className="text-xs text-neutral-500 uppercase tracking-widest mb-2">
             Open-Source Focusrite Scarlett Controller
           </p>
-          <p className="text-sm text-red-400 font-mono">v0.5.0 (20260523)</p>
+          <p className="text-sm text-red-400 font-mono">v0.7.0 (20260524)</p>
           <div className="flex justify-center gap-2 mt-3">
             <LinkButton label="WEBSITE" href="https://github.com/Knives-On-Strings" />
             <LinkButton label="GITHUB" href="https://github.com/Knives-On-Strings/RedMatrix" />

@@ -94,6 +94,20 @@ We follow semantic versioning (`major.minor.patch`) with the following guideline
 - **Minor**: Incremental version bumps when **new capabilities/features** are added (e.g., adding hotplug sync, metering, setup guides).
 - **Patch**: Version bumps when fixing bugs, tweaking existing code, or implementing minor adjustments against existing features.
 
+### Release Builds
+
+**Always use the automated release script** — never manually edit version numbers or copy build artifacts.
+
+```bash
+# Full release: bumps version, runs all tests, builds, deploys to release/
+node scripts/build-release.js <version>
+
+# Quick build: skip tests for faster iteration
+node scripts/build-release.js <version> --skip-tests
+```
+
+The script (`scripts/build-release.js`) automatically updates the version across all 7 locations (`package.json`, `tauri.conf.json`, `Cargo.toml`, `About.tsx`, `Footer.tsx`, `App.test.tsx`, `Changelog.md`), runs the frontend and backend test suites, executes the Tauri production build, and copies the installers to the `release/` directory.
+
 ## Target Device
 
 Primary: Focusrite Scarlett 18i20 3rd Generation (USB VID `0x1235`, PID `0x8215`)

@@ -4,6 +4,29 @@ All notable changes to the RedMatrix Focusrite Control alternative will be docum
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-05-24
+
+### Added
+- Implemented software-based Mixer VCA sub-group faders and Master fader relative scaling logic (clamped to [-80.0, 6.0] dB, leaving silent channels at -80.0 dB untouched).
+- Added input stereo linking in the Mixer view: linked channels are rendered as combined stereo strips with dual levels meters and linked faders/mutes/solos.
+- Added output stereo linking in the Output Matrix: linked analogue output columns are grouped together and click events automatically route stereo sources (Mix A/B, DAW, or linked inputs) L-to-L and R-to-R, or clone mono sources.
+- Added a dynamic connection status badge in the header displaying a green "USB" status dot when physical hardware is connected, or an amber "Mock" dot for simulations.
+- Exposed the VCA configuration (assignments, bus masters, main master) in `DeviceState` and persisted VCA settings in the JSON configuration files (`device_{serial}.json`).
+
+## [0.6.0] - 2026-05-24
+
+### Added
+- Added USB hardware control support for settings controls: **Sample Rate**, **Clock Source**, **Digital I/O Mode (S/PDIF Mode)**, and **Speaker Switching (MAIN/ALT)**.
+- Implemented class-specific UAC2 control transfers for Sample Rate and Clock Source.
+- Implemented proprietary control writes for Digital I/O Mode (S/PDIF Mode) and Speaker Switching.
+- Added dynamic descriptor parsing to scan USB Interface 0 configurations and automatically retrieve Clock Source Unit ID and Clock Selector Unit ID.
+- Configured MSVC linker flag `/MANIFESTDEPENDENCY` dynamically in `build.rs` to fix `STATUS_ENTRYPOINT_NOT_FOUND` load-time crashes in console-run test binaries under Windows.
+- Enabled `vendored` feature on `rusb` dependency to statically link `libusb` and avoid DLL distribution issues.
+
+### Fixed
+- Fixed generic type mismatch in the `dispatch_command` function inside `writes.rs` to allow testing setting control commands with `MockTransport`.
+- Disabled Master Volume hardware writes by returning a read-only error on physical hardware.
+
 ## [0.5.0] - 2026-05-23
 
 ### Added
