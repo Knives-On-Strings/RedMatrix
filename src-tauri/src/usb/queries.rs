@@ -3,13 +3,81 @@ use crate::usb::RusbTransport;
 use crate::protocol::devices::DeviceConfig;
 use crate::protocol::constants::*;
 use crate::protocol::mixer::{mixer_value_to_db, volume_raw_to_db};
-use crate::server::state::{DeviceState, SyncStatus, RouteEntry};
+use crate::server::state::{DeviceState, SyncStatus, RouteEntry, ClockSource};
 
 pub fn query_initial_state(
     runner: &mut CommandRunner<RusbTransport>,
     config: &DeviceConfig,
     state: &mut DeviceState,
+    clock_source_id: u8,
+    clock_selector_id: u8,
 ) -> Result<(), String> {
+    // 0. UAC2 Clock / Sample Rate settings
+    if let Ok(rate) = runner.get_uac2_sample_rate(clock_source_id) {
+        state.sample_rate = rate;
+    }
+    if let Ok(src) = runner.get_uac2_clock_source(clock_selector_id) {
+        state.clock_source = match src {
+            2 => ClockSource::Spdif,
+            3 => ClockSource::Adat,
+            _ => ClockSource::Internal,
+        };
+    }
+
+    // 0b. Digital I/O Mode
+    if config.has_spdif_modes() {
+        let offset = if config.series == "Clarett USB" || config.series == "Clarett+" {
+            0x9e
+        } else {
+            0x94
+        };
+        if let Ok(Response::Data { data }) = runner.execute(Request::GetData { offset, size: 1 }) {
+            if !data.is_empty() {
+                let val = data[0];
+                if let Some(mode) = config.spdif_modes.iter().find(|m| m.value == val) {
+                    state.spdif_mode = match mode.name {
+                        "S/PDIF RCA" | "RCA" => "spdif_rca".to_string(),
+                        "S/PDIF Optical" | "Optical" => "spdif_optical".to_string(),
+                        "Dual ADAT" => "dual_adat".to_string(),
+                        other => other.to_string(),
+                    };
+                }
+            }
+        }
+    }
+
+    // 0c. Speaker Switching & Talkback Enable/Switch states
+    if config.has_speaker_switching || config.has_talkback {
+        let mut other_enable = 0u8;
+        let mut other_switch = 0u8;
+        if let Ok(Response::Data { data }) = runner.execute(Request::GetData { offset: 0xa0, size: 1 }) {
+            if !data.is_empty() {
+                other_enable = data[0];
+            }
+        }
+        if let Ok(Response::Data { data }) = runner.execute(Request::GetData { offset: 0x9f, size: 1 }) {
+            if !data.is_empty() {
+                other_switch = data[0];
+            }
+        }
+
+        if config.has_speaker_switching {
+            let enabled = (other_enable & (1 << 0)) != 0;
+            let alt = (other_switch & (1 << 0)) != 0;
+            state.monitor.speaker_switching = if !enabled {
+                "disabled".to_string()
+            } else if alt {
+                "alt".to_string()
+            } else {
+                "main".to_string()
+            };
+        }
+
+        if config.has_talkback {
+            state.monitor.talkback = (other_enable & (1 << 1)) != 0 && (other_switch & (1 << 1)) != 0;
+        }
+    }
+
     // 1. Sync status
     if let Ok(Response::Sync { status }) = runner.execute(Request::GetSync) {
         state.sync_status = if status == 1 {

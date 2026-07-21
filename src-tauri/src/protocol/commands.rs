@@ -336,6 +336,66 @@ impl<T: UsbTransport> CommandRunner<T> {
         parse_response(request.cmd_id(), payload)
     }
 
+    pub fn set_uac2_sample_rate(&mut self, clock_source_id: u8, rate: u32) -> Result<(), CommandError> {
+        let mut data = rate.to_le_bytes();
+        self.transport.class_transfer(
+            0x21, // Out | Class | Interface
+            1,    // CUR_SET
+            0x0100, // CS_SAM_FREQ_CONTROL << 8
+            (clock_source_id as u16) << 8,
+            &mut data,
+        ).map_err(|e| match e {
+            TransportError::Timeout => CommandError::Timeout,
+            other => CommandError::Transport { source: other },
+        })?;
+        Ok(())
+    }
+
+    pub fn get_uac2_sample_rate(&mut self, clock_source_id: u8) -> Result<u32, CommandError> {
+        let mut data = [0u8; 4];
+        self.transport.class_transfer(
+            0xA1, // In | Class | Interface
+            1,    // CUR_GET
+            0x0100, // CS_SAM_FREQ_CONTROL << 8
+            (clock_source_id as u16) << 8,
+            &mut data,
+        ).map_err(|e| match e {
+            TransportError::Timeout => CommandError::Timeout,
+            other => CommandError::Transport { source: other },
+        })?;
+        Ok(u32::from_le_bytes(data))
+    }
+
+    pub fn set_uac2_clock_source(&mut self, clock_selector_id: u8, source: u8) -> Result<(), CommandError> {
+        let mut data = [source];
+        self.transport.class_transfer(
+            0x21, // Out | Class | Interface
+            1,    // CUR_SET
+            0x0100, // CS_CONTROL_CLOCK_SELECTOR << 8
+            (clock_selector_id as u16) << 8,
+            &mut data,
+        ).map_err(|e| match e {
+            TransportError::Timeout => CommandError::Timeout,
+            other => CommandError::Transport { source: other },
+        })?;
+        Ok(())
+    }
+
+    pub fn get_uac2_clock_source(&mut self, clock_selector_id: u8) -> Result<u8, CommandError> {
+        let mut data = [0u8; 1];
+        self.transport.class_transfer(
+            0xA1, // In | Class | Interface
+            1,    // CUR_GET
+            0x0100, // CS_CONTROL_CLOCK_SELECTOR << 8
+            (clock_selector_id as u16) << 8,
+            &mut data,
+        ).map_err(|e| match e {
+            TransportError::Timeout => CommandError::Timeout,
+            other => CommandError::Transport { source: other },
+        })?;
+        Ok(data[0])
+    }
+
     pub fn initialize(&mut self) -> Result<u32, CommandError> {
         self.seq.reset(1);
         self.execute(Request::Init1)?;
@@ -351,6 +411,10 @@ impl<T: UsbTransport> CommandRunner<T> {
 
     pub fn transport(&self) -> &T {
         &self.transport
+    }
+
+    pub fn transport_mut(&mut self) -> &mut T {
+        &mut self.transport
     }
 }
 
@@ -710,5 +774,43 @@ mod tests {
         let init2_header = PacketHeader::from_bytes(&transport.sent[1]).unwrap();
         assert_eq!(init2_header.cmd, CMD_INIT_2);
         assert_eq!(init2_header.seq, 1);
+    }
+
+    #[test]
+    fn test_uac2_get_set_sample_rate() {
+        let mut transport = MockTransport::new();
+        // Push CUR_GET response (48000 Hz)
+        transport.push_class_response(48000u32.to_le_bytes().to_vec());
+        // Push CUR_SET response (ACK or success)
+        transport.push_class_response(vec![]);
+
+        let mut runner = CommandRunner::new(transport);
+        let rate = runner.get_uac2_sample_rate(41).unwrap();
+        assert_eq!(rate, 48000);
+
+        runner.set_uac2_sample_rate(41, 96000).unwrap();
+
+        let transport = runner.transport();
+        assert_eq!(transport.class_sent[0], (0xA1, 1, 0x0100, 41 << 8, vec![0; 4]));
+        assert_eq!(transport.class_sent[1], (0x21, 1, 0x0100, 41 << 8, 96000u32.to_le_bytes().to_vec()));
+    }
+
+    #[test]
+    fn test_uac2_get_set_clock_source() {
+        let mut transport = MockTransport::new();
+        // Push CUR_GET response (Clock Source = 2, i.e., S/PDIF)
+        transport.push_class_response(vec![2]);
+        // Push CUR_SET response
+        transport.push_class_response(vec![]);
+
+        let mut runner = CommandRunner::new(transport);
+        let src = runner.get_uac2_clock_source(40).unwrap();
+        assert_eq!(src, 2);
+
+        runner.set_uac2_clock_source(40, 1).unwrap();
+
+        let transport = runner.transport();
+        assert_eq!(transport.class_sent[0], (0xA1, 1, 0x0100, 40 << 8, vec![0; 1]));
+        assert_eq!(transport.class_sent[1], (0x21, 1, 0x0100, 40 << 8, vec![1]));
     }
 }

@@ -4,10 +4,62 @@ use crate::protocol::mixer::{db_to_mixer_value, db_to_volume_raw};
 use crate::server::messages::ClientMessage;
 use crate::server::state::DeviceState;
 use crate::usb::queries::encode_route;
-use crate::usb::RusbTransport;
+use crate::protocol::transport::UsbTransport;
 
-pub fn dispatch_command(
-    runner: &mut CommandRunner<RusbTransport>,
+
+fn write_crosspoint_gain<T: UsbTransport>(
+    runner: &mut CommandRunner<T>,
+    state: &DeviceState,
+    mix: u32,
+    channel: u32,
+) -> Result<(), String> {
+    let base_gain = match state.mixer.gains.get(mix as usize) {
+        Some(bus) => match bus.get(channel as usize) {
+            Some(&g) => g,
+            None => return Ok(()),
+        },
+        None => return Ok(()),
+    };
+
+    let actual_gain = if base_gain > -80.0 {
+        let vca_offset = state.bus_masters.get(mix as usize).cloned().unwrap_or(0.0);
+        let master_offset = if state.sub_assignments.contains(&mix) {
+            state.master_db
+        } else {
+            0.0
+        };
+        (base_gain + vca_offset + master_offset).clamp(-80.0, 6.0)
+    } else {
+        -80.0
+    };
+
+    let gain = db_to_mixer_value(actual_gain);
+    let req = Request::SetMix {
+        mix_num: mix as u16,
+        channel: channel as u16,
+        gain,
+    };
+    runner.execute(req).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn write_bus_gains<T: UsbTransport>(
+    runner: &mut CommandRunner<T>,
+    state: &DeviceState,
+    mix: u32,
+) -> Result<(), String> {
+    let num_channels = match state.mixer.gains.get(mix as usize) {
+        Some(bus) => bus.len(),
+        None => return Ok(()),
+    };
+    for ch in 0..num_channels {
+        write_crosspoint_gain(runner, state, mix, ch as u32)?;
+    }
+    Ok(())
+}
+
+pub fn dispatch_command<T: UsbTransport>(
+    runner: &mut CommandRunner<T>,
     config: &DeviceConfig,
     state: &DeviceState,
     command: &ClientMessage,
@@ -115,13 +167,25 @@ pub fn dispatch_command(
             runner.execute(Request::DataCmd { activate: 8 }).map_err(|e| e.to_string())?;
         }
         ClientMessage::SetMixGain { payload } => {
-            let gain = db_to_mixer_value(payload.gain_db);
-            let req = Request::SetMix {
-                mix_num: payload.mix as u16,
-                channel: payload.channel as u16,
-                gain,
-            };
-            runner.execute(req).map_err(|e| e.to_string())?;
+            write_crosspoint_gain(runner, state, payload.mix, payload.channel)?;
+        }
+        ClientMessage::SetSubAssignment { .. } => {
+            for mix in 0..12 {
+                write_bus_gains(runner, state, mix as u32)?;
+            }
+        }
+        ClientMessage::SetBusMaster { payload } => {
+            write_bus_gains(runner, state, payload.mix)?;
+        }
+        ClientMessage::SetMasterDb { .. } => {
+            for &mix in &state.sub_assignments {
+                write_bus_gains(runner, state, mix)?;
+            }
+        }
+        ClientMessage::InitVcaState { .. } => {
+            for mix in 0..state.mixer.gains.len() {
+                write_bus_gains(runner, state, mix as u32)?;
+            }
         }
         ClientMessage::SetMixMute { payload } => {
             let gain = if payload.muted { 0 } else { 8192 };
@@ -209,7 +273,154 @@ pub fn dispatch_command(
                 }
             }
         }
+        ClientMessage::SetSampleRate { payload } => {
+            let clock_src_id = runner.transport().clock_source_id();
+            runner.set_uac2_sample_rate(clock_src_id, payload.rate)
+                .map_err(|e| format!("Failed to set sample rate: {}", e))?;
+        }
+        ClientMessage::SetClockSource { payload } => {
+            let clock_sel_id = runner.transport().clock_selector_id();
+            let src_byte = match payload.source.as_str() {
+                "spdif" => 2,
+                "adat" => 3,
+                _ => 1, // "internal" or fallback
+            };
+            runner.set_uac2_clock_source(clock_sel_id, src_byte)
+                .map_err(|e| format!("Failed to set clock source: {}", e))?;
+        }
+        ClientMessage::SetSpdifMode { payload } => {
+            if config.has_spdif_modes() {
+                let val = match payload.mode.as_str() {
+                    "spdif_optical" => 6,
+                    "dual_adat" => 1,
+                    _ => 0, // "spdif_rca" or fallback
+                };
+                let offset = if config.series == "Clarett USB" || config.series == "Clarett+" {
+                    0x9e
+                } else {
+                    0x94
+                };
+                let activate = if config.series == "Clarett USB" || config.series == "Clarett+" {
+                    4
+                } else {
+                    6
+                };
+
+                let req = Request::SetData {
+                    offset,
+                    data: vec![val],
+                };
+                runner.execute(req).map_err(|e| e.to_string())?;
+                runner.execute(Request::DataCmd { activate }).map_err(|e| e.to_string())?;
+            }
+        }
+        ClientMessage::SetSpeakerSwitching { payload } => {
+            if config.has_speaker_switching {
+                let (enable, alt) = match payload.mode.as_str() {
+                    "alt" => (1u8, 1u8),
+                    "main" => (1u8, 0u8),
+                    _ => (0u8, 0u8), // "disabled" or fallback
+                };
+
+                // Write MONITOR_OTHER_ENABLE (0xa0) bit 0
+                let current_enable = match runner.execute(Request::GetData { offset: 0xa0, size: 1 }) {
+                    Ok(Response::Data { data }) if !data.is_empty() => data[0],
+                    _ => 0,
+                };
+                let updated_enable = if enable != 0 {
+                    current_enable | (1 << 0)
+                } else {
+                    current_enable & !(1 << 0)
+                };
+                runner.execute(Request::SetData {
+                    offset: 0xa0,
+                    data: vec![updated_enable],
+                }).map_err(|e| e.to_string())?;
+
+                // Write MONITOR_OTHER_SWITCH (0x9f) bit 0
+                let current_switch = match runner.execute(Request::GetData { offset: 0x9f, size: 1 }) {
+                    Ok(Response::Data { data }) if !data.is_empty() => data[0],
+                    _ => 0,
+                };
+                let updated_switch = if alt != 0 {
+                    current_switch | (1 << 0)
+                } else {
+                    current_switch & !(1 << 0)
+                };
+                runner.execute(Request::SetData {
+                    offset: 0x9f,
+                    data: vec![updated_switch],
+                }).map_err(|e| e.to_string())?;
+
+                runner.execute(Request::DataCmd { activate: 10 }).map_err(|e| e.to_string())?;
+            }
+        }
+        ClientMessage::SetMasterVolume { .. } => {
+            return Err("Master volume control is read-only on physical hardware".to_string());
+        }
         _ => {}
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::protocol::commands::CommandRunner;
+    use crate::protocol::transport::mock::MockTransport;
+    use crate::protocol::devices::gen3::SCARLETT_18I20_GEN3;
+    use crate::server::messages::{ClientMessage, SampleRatePayload, ClockSourcePayload, VolumePayload};
+    use crate::server::state::DeviceState;
+
+    fn make_test_runner() -> CommandRunner<MockTransport> {
+        let mut transport = MockTransport::new();
+        // Since we'll need responses for get/set data or class transfer:
+        transport.push_class_response(vec![]); // For set sample rate / clock source
+        transport.push_class_response(vec![]);
+        CommandRunner::new(transport)
+    }
+
+    #[test]
+    fn test_dispatch_set_sample_rate() {
+        let mut runner = make_test_runner();
+        let config = SCARLETT_18I20_GEN3;
+        let state = DeviceState::mock_18i20_gen3();
+        let cmd = ClientMessage::SetSampleRate {
+            payload: SampleRatePayload { rate: 96000 },
+        };
+
+        dispatch_command(&mut runner, &config, &state, &cmd).unwrap();
+
+        let transport = runner.transport();
+        assert_eq!(transport.class_sent[0], (0x21, 1, 0x0100, 41 << 8, 96000u32.to_le_bytes().to_vec()));
+    }
+
+    #[test]
+    fn test_dispatch_set_clock_source() {
+        let mut runner = make_test_runner();
+        let config = SCARLETT_18I20_GEN3;
+        let state = DeviceState::mock_18i20_gen3();
+        let cmd = ClientMessage::SetClockSource {
+            payload: ClockSourcePayload { source: "spdif".to_string() },
+        };
+
+        dispatch_command(&mut runner, &config, &state, &cmd).unwrap();
+
+        let transport = runner.transport();
+        assert_eq!(transport.class_sent[0], (0x21, 1, 0x0100, 40 << 8, vec![2]));
+    }
+
+    #[test]
+    fn test_dispatch_set_master_volume_readonly() {
+        let mut runner = make_test_runner();
+        let config = SCARLETT_18I20_GEN3;
+        let state = DeviceState::mock_18i20_gen3();
+        let cmd = ClientMessage::SetMasterVolume {
+            payload: VolumePayload { db: -6.0 },
+        };
+
+        let res = dispatch_command(&mut runner, &config, &state, &cmd);
+        assert!(res.is_err());
+        assert_eq!(res.unwrap_err(), "Master volume control is read-only on physical hardware");
+    }
 }

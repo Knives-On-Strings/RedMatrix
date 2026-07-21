@@ -23,26 +23,39 @@ pub struct RusbTransport {
     handle: Arc<DeviceHandle<GlobalContext>>,
     interface: u8,
     timeout: Duration,
+    pub clock_source_id: u8,
+    pub clock_selector_id: u8,
 }
 
 impl RusbTransport {
-    pub fn new(handle: Arc<DeviceHandle<GlobalContext>>, interface: u8) -> Self {
+    pub fn new(
+        handle: Arc<DeviceHandle<GlobalContext>>,
+        interface: u8,
+        clock_source_id: u8,
+        clock_selector_id: u8,
+    ) -> Self {
         Self {
             handle,
             interface,
             timeout: Duration::from_millis(5000),
+            clock_source_id,
+            clock_selector_id,
         }
     }
 
     pub fn with_timeout(
         handle: Arc<DeviceHandle<GlobalContext>>,
         interface: u8,
+        clock_source_id: u8,
+        clock_selector_id: u8,
         timeout: Duration,
     ) -> Self {
         Self {
             handle,
             interface,
             timeout,
+            clock_source_id,
+            clock_selector_id,
         }
     }
 }
@@ -94,6 +107,59 @@ impl UsbTransport for RusbTransport {
         buf.truncate(read);
         Ok(buf)
     }
+
+    fn class_transfer(
+        &mut self,
+        request_type: u8,
+        request: u8,
+        value: u16,
+        index: u16,
+        data: &mut [u8],
+    ) -> Result<usize, TransportError> {
+        if (request_type & 0x80) == 0 {
+            // Out transfer (write)
+            let written = self.handle.write_control(
+                request_type,
+                request,
+                value,
+                index,
+                data,
+                self.timeout,
+            ).map_err(|e| {
+                if e == rusb::Error::Timeout {
+                    TransportError::Timeout
+                } else {
+                    TransportError::TransferFailed(e.to_string())
+                }
+            })?;
+            Ok(written)
+        } else {
+            // In transfer (read)
+            let read = self.handle.read_control(
+                request_type,
+                request,
+                value,
+                index,
+                data,
+                self.timeout,
+            ).map_err(|e| {
+                if e == rusb::Error::Timeout {
+                    TransportError::Timeout
+                } else {
+                    TransportError::TransferFailed(e.to_string())
+                }
+            })?;
+            Ok(read)
+        }
+    }
+
+    fn clock_source_id(&self) -> u8 {
+        self.clock_source_id
+    }
+
+    fn clock_selector_id(&self) -> u8 {
+        self.clock_selector_id
+    }
 }
 
 /// A handle to a successfully opened and claimed Scarlett/Clarett device.
@@ -102,6 +168,8 @@ pub struct ConnectedDevice {
     pub interface: u8,
     pub config: &'static DeviceConfig,
     pub descriptor: rusb::DeviceDescriptor,
+    pub clock_source_id: u8,
+    pub clock_selector_id: u8,
 }
 
 /// Run Step 0 initialization (CMD_INIT bRequest = 0) on the control interface.
@@ -116,6 +184,45 @@ pub fn initialize_device(handle: &DeviceHandle<GlobalContext>, interface: u8) ->
         Duration::from_millis(2000),
     ); // Ignore errors as some devices skip step 0
     Ok(())
+}
+
+fn find_clock_unit_ids(device: &rusb::Device<GlobalContext>) -> (u8, u8) {
+    let mut clock_source_id = 41; // Default fallback
+    let mut clock_selector_id = 40; // Default fallback
+
+    if let Ok(config_desc) = device.active_config_descriptor() {
+        for interface in config_desc.interfaces() {
+            for interface_desc in interface.descriptors() {
+                // Interface Class 1 = Audio, Subclass 1 = Audio Control
+                if interface_desc.class_code() == 1 && interface_desc.sub_class_code() == 1 {
+                    let mut extra = interface_desc.extra();
+                    while extra.len() >= 3 {
+                        let len = extra[0] as usize;
+                        if len > extra.len() || len < 3 {
+                            break;
+                        }
+                        let desc_type = extra[1];
+                        let desc_subtype = extra[2];
+
+                        if desc_type == 0x24 { // CS_INTERFACE
+                            if desc_subtype == 0x0A { // CLOCK_SOURCE
+                                if len >= 8 {
+                                    clock_source_id = extra[3];
+                                }
+                            } else if desc_subtype == 0x0B { // CLOCK_SELECTOR
+                                if len >= 7 {
+                                    clock_selector_id = extra[3];
+                                }
+                            }
+                        }
+                        extra = &extra[len..];
+                    }
+                }
+            }
+        }
+    }
+
+    (clock_source_id, clock_selector_id)
 }
 
 /// Scan for a supported Scarlett Gen 2/3 or Clarett device and claim its control interface.
@@ -146,11 +253,15 @@ pub fn find_device() -> Option<ConnectedDevice> {
                     if handle.claim_interface(interface).is_ok() {
                         let _ = initialize_device(&handle, interface);
                         log::info!("Successfully initialized USB device!");
+                        let (clock_src, clock_sel) = find_clock_unit_ids(&device);
+                        log::info!("Dynamic UAC2 Clock Source ID: {}, Clock Selector ID: {}", clock_src, clock_sel);
                         return Some(ConnectedDevice {
                             handle: Arc::new(handle),
                             interface,
                             config,
                             descriptor: desc,
+                            clock_source_id: clock_src,
+                            clock_selector_id: clock_sel,
                         });
                     } else {
                         log::warn!("Failed to claim interface {}", interface);
@@ -214,12 +325,13 @@ pub fn spawn_interrupt_loop(
 
                             if let Some(config) = config_opt {
                                 // Build a transport for querying
-                                let transport = RusbTransport::new(handle.clone(), 
-                                    rt.block_on(async {
-                                        let lock = active_usb_device.lock().await;
-                                        lock.as_ref().map(|d| d.interface).unwrap_or(3)
-                                    })
-                                );
+                                let (interface, clock_src, clock_sel) = rt.block_on(async {
+                                    let lock = active_usb_device.lock().await;
+                                    lock.as_ref()
+                                        .map(|d| (d.interface, d.clock_source_id, d.clock_selector_id))
+                                        .unwrap_or((3, 41, 40))
+                                });
+                                let transport = RusbTransport::new(handle.clone(), interface, clock_src, clock_sel);
                                 let mut runner = crate::protocol::commands::CommandRunner::new(transport);
 
                                 // Query the changed state and update DeviceState
