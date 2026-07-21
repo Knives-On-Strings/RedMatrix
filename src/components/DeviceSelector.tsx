@@ -1,14 +1,17 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useDevice } from "../hooks/useDevice";
 
 interface DeviceSelectorProps {
   onDeviceSwitch: () => void;
 }
 
 export default function DeviceSelector({ onDeviceSwitch }: DeviceSelectorProps) {
+  const { state } = useDevice();
   const [devices, setDevices] = useState<[number, string][]>([]);
-  const [currentPid, setCurrentPid] = useState(0x8215);
   const [switching, setSwitching] = useState(false);
+
+  const currentPid = state?.device.pid ? Number(state.device.pid) : 0x8215;
 
   useEffect(() => {
     invoke<[number, string][]>("list_mock_devices")
@@ -20,7 +23,6 @@ export default function DeviceSelector({ onDeviceSwitch }: DeviceSelectorProps) 
     setSwitching(true);
     try {
       await invoke("switch_mock_device", { pid });
-      setCurrentPid(pid);
       onDeviceSwitch();
     } catch (e) {
       console.error("Failed to switch device:", e);

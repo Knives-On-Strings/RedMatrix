@@ -12,6 +12,7 @@ export function mockDeviceState(): DeviceState {
       series: "Scarlett Gen 3",
       firmware_version: 1644,
       serial: "P9H7KQ79703C80",
+      is_usb: false,
     },
     sample_rate: 48000,
     sync_status: "locked",
@@ -80,6 +81,9 @@ export function mockDeviceState(): DeviceState {
       soloed: Array.from({ length: 25 }, () => Array.from({ length: 12 }, () => false)),
     },
     routing: Array.from({ length: 20 }, (_, i) => ({ type: "pcm" as const, index: i })),
+    sub_assignments: [0, 1, 2, 3],
+    bus_masters: Array(12).fill(0),
+    master_db: 0,
   };
 }
 

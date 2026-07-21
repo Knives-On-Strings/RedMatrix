@@ -26,6 +26,9 @@ export interface DeviceState {
   inputs: InputState[];
   mixer: MixerState;
   routing: RouteEntry[];
+  sub_assignments: number[];
+  bus_masters: number[];
+  master_db: number;
 }
 
 /**
@@ -74,6 +77,7 @@ export interface DeviceInfo {
   series: string;
   firmware_version: number;
   serial: string;
+  is_usb: boolean;
 }
 
 export interface Features {
@@ -246,7 +250,11 @@ export type ClientMessage =
   | SaveConfigMessage
   | ClearMixerMessage
   | SetBusGainsMessage
-  | SetRoutesBatchMessage;
+  | SetRoutesBatchMessage
+  | SetSubAssignmentMessage
+  | SetBusMasterMessage
+  | SetMasterDbMessage
+  | InitVcaStateMessage;
 
 export interface ClientHelloMessage {
   type: "client_hello";
@@ -373,5 +381,29 @@ export interface SetRoutesBatchMessage {
   type: "set_routes_batch";
   payload: {
     routes: Array<{ destination: number; source_type: PortType; source_index: number }>;
+  };
+}
+
+export interface SetSubAssignmentMessage {
+  type: "set_sub_assignment";
+  payload: { sub_index: number; mix: number };
+}
+
+export interface SetBusMasterMessage {
+  type: "set_bus_master";
+  payload: { mix: number; gain_db: number };
+}
+
+export interface SetMasterDbMessage {
+  type: "set_master_db";
+  payload: { gain_db: number };
+}
+
+export interface InitVcaStateMessage {
+  type: "init_vca_state";
+  payload: {
+    sub_assignments: number[];
+    bus_masters: number[];
+    master_db: number;
   };
 }

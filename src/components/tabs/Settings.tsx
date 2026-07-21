@@ -69,7 +69,7 @@ export default function Settings() {
   }
 
   const handleThemeChange = (themeId: string) => {
-    setTheme(themeId);
+    setTheme(themeId, { description: `Change Theme to ${THEMES[themeId]?.name ?? themeId}` });
   };
 
   return (
@@ -81,7 +81,13 @@ export default function Settings() {
             <SettingRow label="Sample Rate">
               <select
                 value={state.sample_rate}
-                onChange={(e) => sendCommand({ type: "set_sample_rate", payload: { rate: Number(e.target.value) } })}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  sendCommand(
+                    { type: "set_sample_rate", payload: { rate: val } },
+                    { undo: { type: "set_sample_rate", payload: { rate: state.sample_rate } }, description: `Change sample rate to ${val / 1000} kHz` }
+                  );
+                }}
                 className="bg-neutral-700 text-sm text-neutral-300 border border-neutral-600 rounded px-2 py-1"
               >
                 <option value="44100">44.1 kHz</option>
@@ -96,7 +102,13 @@ export default function Settings() {
             <SettingRow label="Clock Source">
               <select
                 value={state.clock_source}
-                onChange={(e) => sendCommand({ type: "set_clock_source", payload: { source: e.target.value as ClockSource } })}
+                onChange={(e) => {
+                  const val = e.target.value as ClockSource;
+                  sendCommand(
+                    { type: "set_clock_source", payload: { source: val } },
+                    { undo: { type: "set_clock_source", payload: { source: state.clock_source } }, description: `Change clock source to ${val.toUpperCase()}` }
+                  );
+                }}
                 className="bg-neutral-700 text-sm text-neutral-300 border border-neutral-600 rounded px-2 py-1"
               >
                 <option value="internal">Internal</option>
@@ -112,7 +124,18 @@ export default function Settings() {
             <SettingRow label="Digital I/O Mode">
               <select
                 value={state.spdif_mode}
-                onChange={(e) => sendCommand({ type: "set_spdif_mode", payload: { mode: e.target.value } })}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const labelMap: Record<string, string> = {
+                    spdif_rca: "S/PDIF RCA",
+                    spdif_optical: "S/PDIF Optical",
+                    dual_adat: "Dual ADAT"
+                  };
+                  sendCommand(
+                    { type: "set_spdif_mode", payload: { mode: val } },
+                    { undo: { type: "set_spdif_mode", payload: { mode: state.spdif_mode } }, description: `Change Digital I/O Mode to ${labelMap[val] ?? val}` }
+                  );
+                }}
                 className="bg-neutral-700 text-sm text-neutral-300 border border-neutral-600 rounded px-2 py-1"
               >
                 <option value="spdif_rca">S/PDIF RCA</option>
@@ -181,21 +204,29 @@ export default function Settings() {
           </SettingGroup>
 
           <SettingGroup title="Device Info">
-            <SettingRow label="Device">
-              <span className="text-sm text-neutral-400">{state.device.name}</span>
-            </SettingRow>
-            <SettingRow label="Series">
-              <span className="text-sm text-neutral-400">{state.device.series}</span>
-            </SettingRow>
-            <SettingRow label="Firmware">
-              <span className="text-sm text-neutral-400 font-mono">{state.device.firmware_version}</span>
-            </SettingRow>
-            <SettingRow label="Serial">
-              <span className="text-sm text-neutral-400 font-mono">{state.device.serial}</span>
-            </SettingRow>
-            <SettingRow label="USB PID">
-              <span className="text-sm text-neutral-400 font-mono">{state.device.pid}</span>
-            </SettingRow>
+            {state.device.is_usb ? (
+              <>
+                <SettingRow label="Device">
+                  <span className="text-sm text-neutral-400">{state.device.name}</span>
+                </SettingRow>
+                <SettingRow label="Series">
+                  <span className="text-sm text-neutral-400">{state.device.series}</span>
+                </SettingRow>
+                <SettingRow label="Firmware">
+                  <span className="text-sm text-neutral-400 font-mono">{state.device.firmware_version}</span>
+                </SettingRow>
+                <SettingRow label="Serial">
+                  <span className="text-sm text-neutral-400 font-mono">{state.device.serial}</span>
+                </SettingRow>
+                <SettingRow label="USB PID">
+                  <span className="text-sm text-neutral-400 font-mono">{state.device.pid}</span>
+                </SettingRow>
+              </>
+            ) : (
+              <div className="py-3 text-sm text-neutral-500 italic text-center">
+                No physical device connected (Mock Mode)
+              </div>
+            )}
           </SettingGroup>
 
           <RemoteControlSection />

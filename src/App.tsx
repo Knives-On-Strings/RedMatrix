@@ -82,8 +82,15 @@ function App() {
           onSettingsClick={() => setShowSettings(!showSettings)}
           onAboutClick={() => setShowAbout(true)}
           onDeviceSwitch={handleDeviceSwitch}
+          isSettingsActive={showSettings}
         />
-        <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
+        <TabBar
+          activeTab={activeTab}
+          onTabChange={(tab) => {
+            setActiveTab(tab);
+            setShowSettings(false);
+          }}
+        />
         <main className="flex-1 relative">
           {showSettings ? (
             <Settings />

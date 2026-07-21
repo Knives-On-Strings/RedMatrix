@@ -1,4 +1,4 @@
-import type { DeviceState } from "../../../types";
+import type { DeviceState, ClientMessage } from "../../../types";
 import { useDevice } from "../../../hooks/useDevice";
 import { busLabel } from "../../../constants";
 import GainCell from "../../GainCell";
@@ -36,10 +36,14 @@ export default function InputMatrix({ state }: InputMatrixProps) {
   const handleCellClick = (bus: number, channel: number) => {
     const currentGain = deviceState?.mixer.gains[bus]?.[channel] ?? -80;
     const newGain = currentGain > -80 ? -80 : 0;
-    sendCommand({
-      type: "set_mix_gain",
-      payload: { mix: bus, channel, gain_db: newGain },
-    });
+    const label = inputLabels[channel] || `Ch ${channel + 1}`;
+    sendCommand(
+      { type: "set_mix_gain", payload: { mix: bus, channel, gain_db: newGain } },
+      {
+        undo: { type: "set_mix_gain", payload: { mix: bus, channel, gain_db: currentGain } },
+        description: `${newGain > -80 ? "Connect" : "Disconnect"} ${label} to Bus ${busLabel(bus)}`
+      }
+    );
   };
 
   return (
@@ -50,13 +54,39 @@ export default function InputMatrix({ state }: InputMatrixProps) {
         </h3>
         <div className="flex gap-2">
           <button
-            onClick={() => sendCommand({ type: "set_bus_gains", payload: { mix: 0, gain_db: 0 } })}
+            onClick={() => {
+              const currentGains = deviceState?.mixer.gains[0] ?? [];
+              const undoMsgs: ClientMessage[] = currentGains.map((gain, ch) => ({
+                type: "set_mix_gain",
+                payload: { mix: 0, channel: ch, gain_db: gain }
+              }));
+              sendCommand(
+                { type: "set_bus_gains", payload: { mix: 0, gain_db: 0 } },
+                { undo: undoMsgs, description: "Set Bus A to Unity" }
+              );
+            }}
             className="text-[10px] px-2 py-1 bg-neutral-700 text-neutral-400 rounded hover:bg-neutral-600"
           >
             Unity Bus A
           </button>
           <button
-            onClick={() => sendCommand({ type: "clear_mixer", payload: {} })}
+            onClick={() => {
+              const undoMsgs: ClientMessage[] = [];
+              deviceState?.mixer.gains.forEach((busGains, busIdx) => {
+                busGains.forEach((gain, chIdx) => {
+                  if (gain > -80) {
+                    undoMsgs.push({
+                      type: "set_mix_gain",
+                      payload: { mix: busIdx, channel: chIdx, gain_db: gain }
+                    });
+                  }
+                });
+              });
+              sendCommand(
+                { type: "clear_mixer", payload: {} },
+                { undo: undoMsgs, description: "Clear all mixer gains" }
+              );
+            }}
             className="text-[10px] px-2 py-1 bg-red-900 text-red-300 rounded hover:bg-red-800"
           >
             Clear All

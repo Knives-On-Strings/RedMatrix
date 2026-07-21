@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { DeviceState } from "../../../types";
+import type { DeviceState, ClientMessage, PortType } from "../../../types";
 import { useDevice } from "../../../hooks/useDevice";
 import { buildSourceGroups, buildDestList, type PortDef, type SourceGroup } from "../../../utils/routing";
 
@@ -35,9 +35,52 @@ export default function OutputMatrix({ state }: OutputMatrixProps) {
     );
   }
 
-  const { sendCommand } = useDevice();
+  const { sendCommand, stereoPairs, inputStereoPairs } = useDevice();
   const sourceGroups = buildSourceGroups(state);
   const dests = buildDestList(state);
+
+  const groupedDests: Array<
+    | { isStereo: false; index: number; label: string; color: string; type: string }
+    | { isStereo: true; leftIndex: number; rightIndex: number; label: string; color: string; type: string }
+  > = [];
+
+  const processedDestIndices = new Set<number>();
+
+  dests.forEach((dest) => {
+    if (processedDestIndices.has(dest.index)) return;
+
+    if (dest.type === "analogue") {
+      const pair = stereoPairs.find(
+        (p) => p.linked && (p.left === dest.index || p.right === dest.index)
+      );
+      if (pair) {
+        const leftDest = dests.find((d) => d.type === "analogue" && d.index === pair.left);
+        const rightDest = dests.find((d) => d.type === "analogue" && d.index === pair.right);
+        if (leftDest && rightDest) {
+          groupedDests.push({
+            isStereo: true,
+            leftIndex: pair.left,
+            rightIndex: pair.right,
+            label: pair.name || `${leftDest.label} + ${rightDest.label}`,
+            color: leftDest.color,
+            type: "analogue",
+          });
+          processedDestIndices.add(pair.left);
+          processedDestIndices.add(pair.right);
+          return;
+        }
+      }
+    }
+
+    groupedDests.push({
+      isStereo: false,
+      index: dest.index,
+      label: dest.label,
+      color: dest.color,
+      type: dest.type,
+    });
+    processedDestIndices.add(dest.index);
+  });
 
   // Track which groups are collapsed
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -50,19 +93,172 @@ export default function OutputMatrix({ state }: OutputMatrixProps) {
     });
   };
 
-  const handleCellClick = (destIdx: number, source: PortDef) => {
-    sendCommand({
-      type: "set_route",
-      payload: {
-        destination: destIdx,
-        source_type: source.type,
-        source_index: source.index,
-      },
-    });
+  const getSourcePeer = (src: PortDef): { isStereo: boolean; isLeft: boolean; peerIndex: number } => {
+    if (src.type === "mix") {
+      const isLeft = src.index % 2 === 0;
+      const peerIndex = isLeft ? src.index + 1 : src.index - 1;
+      return { isStereo: true, isLeft, peerIndex };
+    }
+    if (src.type === "pcm") {
+      const isLeft = src.index % 2 === 0;
+      const peerIndex = isLeft ? src.index + 1 : src.index - 1;
+      return { isStereo: true, isLeft, peerIndex };
+    }
+    const linkedPair = inputStereoPairs.find(
+      (p) => p.linked && p.input_type === src.type && (p.left === src.index || p.right === src.index)
+    );
+    if (linkedPair) {
+      const isLeft = src.index === linkedPair.left;
+      const peerIndex = isLeft ? linkedPair.right : linkedPair.left;
+      return { isStereo: true, isLeft, peerIndex };
+    }
+    return { isStereo: false, isLeft: false, peerIndex: 0 };
+  };
+
+  const handleCellClick = (
+    cellDest:
+      | { isStereo: false; index: number; label: string }
+      | { isStereo: true; leftIndex: number; rightIndex: number; label: string },
+    src: PortDef
+  ) => {
+    const active = cellDest.isStereo
+      ? isActiveGrouped(cellDest, src)
+      : (() => {
+          const route = state.routing[cellDest.index];
+          return route ? route.type === src.type && route.index === src.index : false;
+        })();
+
+    if (cellDest.isStereo) {
+      const oldRouteL = state.routing[cellDest.leftIndex] || { type: "off", index: 0 };
+      const oldRouteR = state.routing[cellDest.rightIndex] || { type: "off", index: 0 };
+
+      const undoMsg: ClientMessage = {
+        type: "set_routes_batch",
+        payload: {
+          routes: [
+            {
+              destination: cellDest.leftIndex,
+              source_type: oldRouteL.type as PortType,
+              source_index: oldRouteL.index,
+            },
+            {
+              destination: cellDest.rightIndex,
+              source_type: oldRouteR.type as PortType,
+              source_index: oldRouteR.index,
+            },
+          ],
+        },
+      };
+
+      if (active) {
+        // Toggle off
+        const redoMsg: ClientMessage = {
+          type: "set_routes_batch",
+          payload: {
+            routes: [
+              {
+                destination: cellDest.leftIndex,
+                source_type: "off",
+                source_index: 0,
+              },
+              {
+                destination: cellDest.rightIndex,
+                source_type: "off",
+                source_index: 0,
+              },
+            ],
+          },
+        };
+        sendCommand(redoMsg, {
+          undo: undoMsg,
+          description: `Disconnect ${src.label} from ${cellDest.label}`,
+        });
+      } else {
+        // Route on
+        const peerInfo = getSourcePeer(src);
+        const leftSrcIdx = peerInfo.isStereo ? (peerInfo.isLeft ? src.index : peerInfo.peerIndex) : src.index;
+        const rightSrcIdx = peerInfo.isStereo ? (peerInfo.isLeft ? peerInfo.peerIndex : src.index) : src.index;
+
+        const redoMsg: ClientMessage = {
+          type: "set_routes_batch",
+          payload: {
+            routes: [
+              {
+                destination: cellDest.leftIndex,
+                source_type: src.type,
+                source_index: leftSrcIdx,
+              },
+              {
+                destination: cellDest.rightIndex,
+                source_type: src.type,
+                source_index: rightSrcIdx,
+              },
+            ],
+          },
+        };
+        sendCommand(redoMsg, {
+          undo: undoMsg,
+          description: `Route ${src.label} to ${cellDest.label}`,
+        });
+      }
+    } else {
+      const oldRoute = state.routing[cellDest.index] || { type: "off", index: 0 };
+      const undoMsg: ClientMessage = {
+        type: "set_route",
+        payload: {
+          destination: cellDest.index,
+          source_type: oldRoute.type as PortType,
+          source_index: oldRoute.index,
+        },
+      };
+
+      if (active) {
+        // Toggle off
+        const redoMsg: ClientMessage = {
+          type: "set_route",
+          payload: {
+            destination: cellDest.index,
+            source_type: "off",
+            source_index: 0,
+          },
+        };
+        sendCommand(redoMsg, {
+          undo: undoMsg,
+          description: `Disconnect ${src.label} from ${cellDest.label}`,
+        });
+      } else {
+        // Route on
+        const redoMsg: ClientMessage = {
+          type: "set_route",
+          payload: {
+            destination: cellDest.index,
+            source_type: src.type,
+            source_index: src.index,
+          },
+        };
+        sendCommand(redoMsg, {
+          undo: undoMsg,
+          description: `Route ${src.label} to ${cellDest.label}`,
+        });
+      }
+    }
   };
 
   const handleDirect = () => {
-    sendCommand({
+    const undoMsg: ClientMessage = {
+      type: "set_routes_batch",
+      payload: {
+        routes: dests.map((dest) => {
+          const oldRoute = state.routing[dest.index] || { type: "off", index: 0 };
+          return {
+            destination: dest.index,
+            source_type: oldRoute.type as PortType,
+            source_index: oldRoute.index,
+          };
+        }),
+      },
+    };
+    const redoMsg: ClientMessage = {
       type: "set_routes_batch",
       payload: {
         routes: dests.map((dest, i) => ({
@@ -71,11 +267,28 @@ export default function OutputMatrix({ state }: OutputMatrixProps) {
           source_index: i,
         })),
       },
+    };
+    sendCommand(redoMsg, {
+      undo: undoMsg,
+      description: "Route Direct (1:1)",
     });
   };
 
   const handleClearAll = () => {
-    sendCommand({
+    const undoMsg: ClientMessage = {
+      type: "set_routes_batch",
+      payload: {
+        routes: dests.map((dest) => {
+          const oldRoute = state.routing[dest.index] || { type: "off", index: 0 };
+          return {
+            destination: dest.index,
+            source_type: oldRoute.type as PortType,
+            source_index: oldRoute.index,
+          };
+        }),
+      },
+    };
+    const redoMsg: ClientMessage = {
       type: "set_routes_batch",
       payload: {
         routes: dests.map((dest) => ({
@@ -84,20 +297,58 @@ export default function OutputMatrix({ state }: OutputMatrixProps) {
           source_index: 0,
         })),
       },
+    };
+    sendCommand(redoMsg, {
+      undo: undoMsg,
+      description: "Clear All routing",
     });
   };
 
-  const isActive = (destIdx: number, source: PortDef) => {
-    const route = state.routing[destIdx];
-    if (!route) return false;
-    return route.type === source.type && route.index === source.index;
+  const isActiveGrouped = (
+    cellDest:
+      | { isStereo: false; index: number }
+      | { isStereo: true; leftIndex: number; rightIndex: number },
+    src: PortDef
+  ): boolean => {
+    if (cellDest.isStereo) {
+      const peerInfo = getSourcePeer(src);
+      if (peerInfo.isStereo) {
+        const leftSrcIdx = peerInfo.isLeft ? src.index : peerInfo.peerIndex;
+        const rightSrcIdx = peerInfo.isLeft ? peerInfo.peerIndex : src.index;
+        const routeL = state.routing[cellDest.leftIndex];
+        const routeR = state.routing[cellDest.rightIndex];
+        return !!(
+          routeL &&
+          routeL.type === src.type &&
+          routeL.index === leftSrcIdx &&
+          routeR &&
+          routeR.type === src.type &&
+          routeR.index === rightSrcIdx
+        );
+      } else {
+        const routeL = state.routing[cellDest.leftIndex];
+        const routeR = state.routing[cellDest.rightIndex];
+        return !!(
+          routeL &&
+          routeL.type === src.type &&
+          routeL.index === src.index &&
+          routeR &&
+          routeR.type === src.type &&
+          routeR.index === src.index
+        );
+      }
+    } else {
+      const route = state.routing[cellDest.index];
+      if (!route) return false;
+      return route.type === src.type && route.index === src.index;
+    }
   };
 
   return (
     <div className="p-4">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm text-neutral-300 font-medium">
-          Source &rarr; Output ({dests.length} destinations)
+          Source &rarr; Output ({groupedDests.length} columns)
         </h3>
         <div className="flex gap-2">
           <button onClick={handleDirect} className="text-[10px] px-2 py-1 bg-neutral-700 text-neutral-400 rounded hover:bg-neutral-600">
@@ -118,7 +369,7 @@ export default function OutputMatrix({ state }: OutputMatrixProps) {
           <thead>
             <tr>
               <th className="min-w-[110px]" />
-              {dests.map((dest, di) => (
+              {groupedDests.map((dest, di) => (
                 <th key={di} className="px-0.5 pb-1">
                   <div className="flex flex-col items-center">
                     <div className={`w-1.5 h-1.5 rounded-full ${dest.color} mb-0.5`} />
@@ -139,11 +390,11 @@ export default function OutputMatrix({ state }: OutputMatrixProps) {
                 <GroupRows
                   key={group.label || "off"}
                   group={group}
-                  dests={dests}
+                  groupedDests={groupedDests}
                   isCollapsed={isCollapsed}
                   isCollapsible={isCollapsible}
                   onToggle={() => toggleGroup(group.label)}
-                  isActive={isActive}
+                  isActive={isActiveGrouped}
                   onCellClick={handleCellClick}
                 />
               );
@@ -155,14 +406,35 @@ export default function OutputMatrix({ state }: OutputMatrixProps) {
   );
 }
 
-function GroupRows({ group, dests, isCollapsed, isCollapsible, onToggle, isActive, onCellClick }: {
+function GroupRows({
+  group,
+  groupedDests,
+  isCollapsed,
+  isCollapsible,
+  onToggle,
+  isActive,
+  onCellClick,
+}: {
   group: SourceGroup;
-  dests: PortDef[];
+  groupedDests: Array<
+    | { isStereo: false; index: number; label: string; color: string; type: string }
+    | { isStereo: true; leftIndex: number; rightIndex: number; label: string; color: string; type: string }
+  >;
   isCollapsed: boolean;
   isCollapsible: boolean;
   onToggle: () => void;
-  isActive: (destIdx: number, source: PortDef) => boolean;
-  onCellClick: (destIdx: number, source: PortDef) => void;
+  isActive: (
+    cellDest:
+      | { isStereo: false; index: number; label: string }
+      | { isStereo: true; leftIndex: number; rightIndex: number; label: string },
+    source: PortDef
+  ) => boolean;
+  onCellClick: (
+    cellDest:
+      | { isStereo: false; index: number; label: string }
+      | { isStereo: true; leftIndex: number; rightIndex: number; label: string },
+    source: PortDef
+  ) => void;
 }) {
   return (
     <>
@@ -170,7 +442,7 @@ function GroupRows({ group, dests, isCollapsed, isCollapsible, onToggle, isActiv
       {isCollapsible && (
         <tr>
           <td
-            colSpan={dests.length + 1}
+            colSpan={groupedDests.length + 1}
             className="pt-2 pb-0.5 cursor-pointer select-none"
             onClick={onToggle}
           >
@@ -196,12 +468,12 @@ function GroupRows({ group, dests, isCollapsed, isCollapsible, onToggle, isActiv
               </span>
             </div>
           </td>
-          {dests.map((dest, di) => (
+          {groupedDests.map((dest, di) => (
             <td key={di} className="px-0.5 py-0.5">
               <RouteCell
-                active={isActive(dest.index, src)}
+                active={isActive(dest, src)}
                 sourceColor={src.color}
-                onClick={() => onCellClick(dest.index, src)}
+                onClick={() => onCellClick(dest, src)}
               />
             </td>
           ))}

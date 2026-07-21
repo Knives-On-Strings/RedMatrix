@@ -1,7 +1,38 @@
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import type { DeviceState, OutputState } from "../../../types";
 import { useDevice } from "../../../hooks/useDevice";
 import type { StereoPairConfig } from "../../../hooks/useDevice";
+
+function PairNameInput({ value, onChange, placeholder, className }: { value: string; onChange: (v: string) => void; placeholder: string; className?: string }) {
+  const [val, setVal] = useState(value);
+  useEffect(() => {
+    setVal(value);
+  }, [value]);
+
+  const handleCommit = () => {
+    if (val !== value) {
+      onChange(val);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      (e.target as HTMLInputElement).blur();
+    }
+  };
+
+  return (
+    <input
+      type="text"
+      value={val}
+      onChange={(e) => setVal(e.target.value)}
+      onBlur={handleCommit}
+      onKeyDown={handleKeyDown}
+      placeholder={placeholder}
+      className={className || "text-xs bg-neutral-800 border border-neutral-700 rounded px-2 py-1 flex-1 text-neutral-300 focus:border-neutral-500 focus:outline-none"}
+    />
+  );
+}
 
 interface OutputConfigProps {
   state: DeviceState;
@@ -60,32 +91,27 @@ function StereoPairRow({ pair, leftLabel, rightLabel, onToggle, onNameChange, on
 
         {/* Name / labels */}
         {pair.linked ? (
-          <input
-            type="text"
+          <PairNameInput
             value={pair.name}
-            onChange={(e) => onNameChange(e.target.value)}
-            className="text-xs bg-neutral-800 border border-neutral-700 rounded px-2 py-1 flex-1 text-neutral-300 focus:border-neutral-500 focus:outline-none"
+            onChange={onNameChange}
+            placeholder=""
           />
         ) : (
           <div className="flex gap-2 flex-1">
             <div className="flex items-center gap-1 flex-1">
               <span className="text-[9px] text-neutral-600">L:</span>
-              <input
-                type="text"
+              <PairNameInput
                 value={leftLabel}
-                onChange={(e) => onLeftLabelChange(e.target.value)}
+                onChange={onLeftLabelChange}
                 placeholder={`Output ${pair.left + 1}`}
-                className="text-xs bg-neutral-800 border border-neutral-700 rounded px-2 py-1 flex-1 text-neutral-300 placeholder-neutral-600 focus:border-neutral-500 focus:outline-none"
               />
             </div>
             <div className="flex items-center gap-1 flex-1">
               <span className="text-[9px] text-neutral-600">R:</span>
-              <input
-                type="text"
+              <PairNameInput
                 value={rightLabel}
-                onChange={(e) => onRightLabelChange(e.target.value)}
+                onChange={onRightLabelChange}
                 placeholder={`Output ${pair.right + 1}`}
-                className="text-xs bg-neutral-800 border border-neutral-700 rounded px-2 py-1 flex-1 text-neutral-300 placeholder-neutral-600 focus:border-neutral-500 focus:outline-none"
               />
             </div>
           </div>
@@ -107,6 +133,23 @@ function OutputRow({ output, customLabel, onLabelChange, onMuteToggle }: {
   onLabelChange: (value: string) => void;
   onMuteToggle: () => void;
 }) {
+  const [val, setVal] = useState(customLabel);
+  useEffect(() => {
+    setVal(customLabel);
+  }, [customLabel]);
+
+  const handleCommit = () => {
+    if (val !== customLabel) {
+      onLabelChange(val);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      (e.target as HTMLInputElement).blur();
+    }
+  };
+
   return (
     <div className="flex items-center gap-3 py-2 border-b border-neutral-800 last:border-0">
       <span className="text-[10px] text-neutral-500 font-mono w-6 text-right">{output.index + 1}</span>
@@ -139,8 +182,10 @@ function OutputRow({ output, customLabel, onLabelChange, onMuteToggle }: {
 
       <input
         type="text"
-        value={customLabel}
-        onChange={(e) => onLabelChange(e.target.value)}
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        onBlur={handleCommit}
+        onKeyDown={handleKeyDown}
         placeholder={output.name}
         className="text-xs bg-neutral-800 border border-neutral-700 rounded px-2 py-1 w-32 text-neutral-300 placeholder-neutral-600 focus:border-neutral-500 focus:outline-none"
       />
@@ -156,15 +201,23 @@ export default function OutputConfig({ state }: OutputConfigProps) {
   const pairs = stereoPairs.length > 0 ? stereoPairs : defaultPairs;
 
   const handleToggle = (index: number) => {
+    const pair = pairs[index];
+    const isLinking = pair ? !pair.linked : false;
     setStereoPairs(pairs.map((p, i) =>
       i === index ? { ...p, linked: !p.linked } : p
-    ));
+    ), {
+      description: `${isLinking ? "Link" : "Unlink"} Outputs ${pair ? `${pair.left + 1} and ${pair.right + 1}` : ""}`
+    });
   };
 
   const handleNameChange = (index: number, name: string) => {
+    const pair = pairs[index];
+    const prevName = pair?.name ?? "";
     setStereoPairs(pairs.map((p, i) =>
       i === index ? { ...p, name } : p
-    ));
+    ), {
+      description: `Rename Stereo Pair ${pair ? `${pair.left + 1}+${pair.right + 1}` : ""}${prevName ? ` ("${prevName}")` : ""} to "${name}"`
+    });
   };
 
   return (
@@ -183,8 +236,18 @@ export default function OutputConfig({ state }: OutputConfigProps) {
               rightLabel={getLabel("outputs", `analogue_${pair.right}`, "")}
               onToggle={() => handleToggle(i)}
               onNameChange={(name) => handleNameChange(i, name)}
-              onLeftLabelChange={(v) => setLabel("outputs", `analogue_${pair.left}`, v)}
-              onRightLabelChange={(v) => setLabel("outputs", `analogue_${pair.right}`, v)}
+              onLeftLabelChange={(v) => {
+                const prev = getLabel("outputs", `analogue_${pair.left}`, "");
+                setLabel("outputs", `analogue_${pair.left}`, v, {
+                  description: `Rename Output ${pair.left + 1}${prev ? ` ("${prev}")` : ""} to "${v}"`
+                });
+              }}
+              onRightLabelChange={(v) => {
+                const prev = getLabel("outputs", `analogue_${pair.right}`, "");
+                setLabel("outputs", `analogue_${pair.right}`, v, {
+                  description: `Rename Output ${pair.right + 1}${prev ? ` ("${prev}")` : ""} to "${v}"`
+                });
+              }}
             />
           ))}
         </div>
@@ -198,8 +261,31 @@ export default function OutputConfig({ state }: OutputConfigProps) {
             key={output.index}
             output={output}
             customLabel={getLabel("outputs", `analogue_${output.index}`, "")}
-            onLabelChange={(v) => setLabel("outputs", `analogue_${output.index}`, v)}
-            onMuteToggle={() => sendCommand({ type: "set_output_mute", payload: { index: output.index, muted: !output.muted } })}
+            onLabelChange={(v) => {
+              const prev = getLabel("outputs", `analogue_${output.index}`, "");
+              setLabel("outputs", `analogue_${output.index}`, v, {
+                description: `Rename Output ${output.index + 1}${prev ? ` ("${prev}")` : ""} to "${v}"`
+              });
+            }}
+            onMuteToggle={() => {
+              const pair = stereoPairs.find(
+                (p) => p.linked && (p.left === output.index || p.right === output.index)
+              );
+              const targetIndices = pair ? [pair.left, pair.right] : [output.index];
+              const redoMsgs = targetIndices.map((idx) => ({
+                type: "set_output_mute" as const,
+                payload: { index: idx, muted: !output.muted }
+              }));
+              const undoMsgs = targetIndices.map((idx) => ({
+                type: "set_output_mute" as const,
+                payload: { index: idx, muted: output.muted }
+              }));
+              const displayName = pair ? pair.name : (getLabel("outputs", `analogue_${output.index}`, "") || output.name);
+              sendCommand(redoMsgs, {
+                undo: undoMsgs,
+                description: `${!output.muted ? "Mute" : "Unmute"} ${displayName}`
+              });
+            }}
           />
         ))}
       </div>
@@ -223,12 +309,15 @@ export default function OutputConfig({ state }: OutputConfigProps) {
                 <button className="text-[9px] font-bold px-2 py-1 rounded bg-green-900 text-green-300 hover:bg-green-800">
                   Linked
                 </button>
-                <input
-                  type="text"
+                <PairNameInput
                   value={getLabel("pcm", `pcm_in_${i * 2}`, "")}
-                  onChange={(e) => setLabel("pcm", `pcm_in_${i * 2}`, e.target.value)}
+                  onChange={(v) => {
+                    const prev = getLabel("pcm", `pcm_in_${i * 2}`, "");
+                    setLabel("pcm", `pcm_in_${i * 2}`, v, {
+                      description: `Rename DAW input ${i * 2 + 1}/${i * 2 + 2}${prev ? ` ("${prev}")` : ""} to "${v}"`
+                    });
+                  }}
                   placeholder={`DAW In ${i * 2 + 1}/${i * 2 + 2}`}
-                  className="text-xs bg-neutral-800 border border-neutral-700 rounded px-2 py-1 flex-1 text-neutral-300 placeholder-neutral-600 focus:border-neutral-500 focus:outline-none"
                 />
               </div>
             ))}

@@ -52,3 +52,28 @@
   --port-pcm: #16a34a;
   --port-off: #262626;
 }
+
+@theme {
+  /* Override Tailwind neutral colors with theme CSS custom properties */
+  --color-neutral-50: var(--text-primary);
+  --color-neutral-100: var(--text-primary);
+  --color-neutral-200: var(--text-secondary);
+  --color-neutral-300: var(--text-secondary);
+  --color-neutral-400: var(--text-muted);
+  --color-neutral-500: var(--text-disabled);
+  --color-neutral-600: var(--bg-control-hover);
+  --color-neutral-700: var(--bg-control);
+  --color-neutral-800: var(--bg-surface);
+  --color-neutral-850: var(--bg-surface-raised);
+  --color-neutral-900: var(--bg-app);
+
+  /* Override standard red/green/amber accent & status colors with theme values */
+  --color-red-400: var(--accent);
+  --color-red-500: var(--accent);
+  --color-red-600: var(--btn-mute-active);
+  --color-green-500: var(--led-green);
+  --color-green-600: var(--led-green);
+  --color-amber-500: var(--led-amber);
+  --color-amber-600: var(--led-amber);
+}
+

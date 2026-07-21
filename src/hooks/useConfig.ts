@@ -29,6 +29,9 @@ export interface UserConfig {
     input_type: string;  // "analogue", "spdif", "adat"
   }>;
   bus_names: Record<string, string>;
+  sub_assignments: number[];
+  bus_masters: number[];
+  master_db: number;
 }
 
 export const DEFAULT_CONFIG: UserConfig = {
@@ -37,6 +40,9 @@ export const DEFAULT_CONFIG: UserConfig = {
   stereo_pairs: [],
   input_stereo_pairs: [],
   bus_names: {},
+  sub_assignments: [0, 1, 2, 3],
+  bus_masters: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  master_db: 0,
 };
 
 /** Load config for a device. Returns defaults if no saved config exists. */

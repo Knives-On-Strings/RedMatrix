@@ -1,13 +1,26 @@
 import { useState } from "react";
-import type { InputState } from "../../types";
+import type { InputState, ClientMessage } from "../../types";
 import { useDevice } from "../../hooks/useDevice";
 import { useMeters } from "../../hooks/useMeterStore";
 import { dbToNormalized, normalizedToDb, formatDb, busLabel as busLabelFn } from "../../constants";
 import MeterBar from "../MeterBar";
 
-function Fader({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+function Fader({ value, onChange, onCommit }: { value: number; onChange: (v: number) => void; onCommit?: (startVal: number, endVal: number) => void }) {
   // value in dB, range -80 to +6
   const normalized = dbToNormalized(value);
+  const [initialValue, setInitialValue] = useState<number | null>(null);
+
+  const handleStart = () => {
+    setInitialValue(value);
+  };
+
+  const handleEnd = () => {
+    if (initialValue !== null && onCommit && initialValue !== value) {
+      onCommit(initialValue, value);
+    }
+    setInitialValue(null);
+  };
+
   return (
     <div className="flex flex-col items-center gap-1">
       <input
@@ -15,6 +28,12 @@ function Fader({ value, onChange }: { value: number; onChange: (v: number) => vo
         min={0}
         max={100}
         value={normalized * 100}
+        onFocus={handleStart}
+        onMouseDown={handleStart}
+        onTouchStart={handleStart}
+        onBlur={handleEnd}
+        onMouseUp={handleEnd}
+        onTouchEnd={handleEnd}
         onChange={(e) => {
           const norm = Number(e.target.value) / 100;
           onChange(normalizedToDb(norm));
@@ -34,7 +53,7 @@ function ChannelStrip({ input, gainDb, soloed, muted, onGainChange, onSoloToggle
   gainDb: number;
   soloed: boolean;
   muted: boolean;
-  onGainChange: (db: number) => void;
+  onGainChange: (db: number, startDb?: number) => void;
   onSoloToggle: () => void;
   onMuteToggle: () => void;
   level: number;
@@ -68,7 +87,98 @@ function ChannelStrip({ input, gainDb, soloed, muted, onGainChange, onSoloToggle
 
       <div className="flex gap-1 items-end">
         <MeterBar level={muted ? 0 : level} width="w-2" height="h-32" />
-        <Fader value={gainDb} onChange={onGainChange} />
+        <Fader value={gainDb} onChange={onGainChange} onCommit={(start, end) => onGainChange(end, start)} />
+      </div>
+
+      <div className="flex gap-1">
+        <button
+          onClick={onSoloToggle}
+          className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+            soloed ? "bg-amber-500 text-black" : "bg-neutral-700 text-neutral-500 hover:bg-neutral-600"
+          }`}
+        >
+          S
+        </button>
+        <button
+          onClick={onMuteToggle}
+          className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+            muted ? "bg-red-600 text-white" : "bg-neutral-700 text-neutral-500 hover:bg-neutral-600"
+          }`}
+        >
+          M
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function StereoChannelStrip({
+  inputLeft,
+  inputRight,
+  gainDbLeft,
+  soloedLeft,
+  soloedRight,
+  mutedLeft,
+  mutedRight,
+  levelLeft,
+  levelRight,
+  onGainChange,
+  onSoloToggle,
+  onMuteToggle,
+}: {
+  inputLeft: InputState;
+  inputRight: InputState;
+  gainDbLeft: number;
+  soloedLeft: boolean;
+  soloedRight: boolean;
+  mutedLeft: boolean;
+  mutedRight: boolean;
+  levelLeft: number;
+  levelRight: number;
+  onGainChange: (db: number, startDb?: number) => void;
+  onSoloToggle: () => void;
+  onMuteToggle: () => void;
+}) {
+  const { getLabel } = useDevice();
+  const defaultLabelLeft = inputLeft.type === "spdif"
+    ? `S/${inputLeft.index === 0 ? "L" : "R"}`
+    : inputLeft.type === "adat"
+    ? `AD${inputLeft.index + 1}`
+    : `${inputLeft.index + 1}`;
+  const defaultLabelRight = inputRight.type === "spdif"
+    ? `S/${inputRight.index === 0 ? "L" : "R"}`
+    : inputRight.type === "adat"
+    ? `AD${inputRight.index + 1}`
+    : `${inputRight.index + 1}`;
+
+  const labelLeft = getLabel("inputs", `${inputLeft.type}_${inputLeft.index}`, defaultLabelLeft);
+  const labelRight = getLabel("inputs", `${inputRight.type}_${inputRight.index}`, defaultLabelRight);
+  const label = `${labelLeft} + ${labelRight}`;
+
+  const soloed = soloedLeft || soloedRight;
+  const muted = mutedLeft || mutedRight;
+
+  return (
+    <div className={`flex flex-col items-center gap-1.5 px-2 py-2 rounded ${soloed ? "bg-amber-900/20" : ""}`}>
+      <span className="text-[10px] text-neutral-400 font-mono w-24 text-center truncate">{label}</span>
+
+      {/* Input feature badges */}
+      <div className="flex gap-0.5 h-3">
+        {inputLeft.type === "analogue" && (
+          <>
+            {(inputLeft.inst || inputRight.inst) && <span className="text-[7px] px-0.5 rounded bg-amber-600 text-white">INST</span>}
+            {(inputLeft.pad || inputRight.pad) && <span className="text-[7px] px-0.5 rounded bg-blue-600 text-white">PAD</span>}
+            {(inputLeft.air || inputRight.air) && <span className="text-[7px] px-0.5 rounded bg-sky-500 text-white">AIR</span>}
+          </>
+        )}
+      </div>
+
+      <div className="flex gap-1 items-end">
+        <div className="flex gap-0.5">
+          <MeterBar level={muted ? 0 : levelLeft} width="w-1.5" height="h-32" />
+          <MeterBar level={muted ? 0 : levelRight} width="w-1.5" height="h-32" />
+        </div>
+        <Fader value={gainDbLeft} onChange={onGainChange} onCommit={(start, end) => onGainChange(end, start)} />
       </div>
 
       <div className="flex gap-1">
@@ -102,29 +212,80 @@ function ChannelGroup({ label, inputs, gains, solos, mutes, levels, busIndex, in
   levels: number[];
   busIndex: number;
   indexOffset: number;
-  onGainChange: (bus: number, ch: number, db: number) => void;
-  onSoloToggle: (bus: number, ch: number) => void;
-  onMuteToggle: (bus: number, ch: number) => void;
+  onGainChange: (bus: number, ch: number | [number, number], db: number, startDb?: number) => void;
+  onSoloToggle: (bus: number, ch: number | [number, number]) => void;
+  onMuteToggle: (bus: number, ch: number | [number, number]) => void;
 }) {
+  const { inputStereoPairs } = useDevice();
   if (inputs.length === 0) return null;
+
+  const elements: React.ReactNode[] = [];
+  let i = 0;
+  while (i < inputs.length) {
+    const current = inputs[i];
+    if (!current) {
+      i += 1;
+      continue;
+    }
+    const next = inputs[i + 1];
+
+    // Check if current and next are linked
+    const linkedPair = next
+      ? inputStereoPairs.find(
+          (p) => p.linked && p.input_type === current.type && p.left === current.index && p.right === next.index
+        )
+      : null;
+
+    if (linkedPair && next) {
+      const idxLeft = i;
+      const idxRight = i + 1;
+
+      elements.push(
+        <StereoChannelStrip
+          key={`stereo-${current.type}-${current.index}-${next.index}`}
+          inputLeft={current}
+          inputRight={next}
+          gainDbLeft={gains[idxLeft] ?? -80}
+          soloedLeft={solos[idxLeft] ?? false}
+          soloedRight={solos[idxRight] ?? false}
+          mutedLeft={mutes[idxLeft] ?? false}
+          mutedRight={mutes[idxRight] ?? false}
+          levelLeft={levels[idxLeft] ?? 0}
+          levelRight={levels[idxRight] ?? 0}
+          onGainChange={(db, startDb) => {
+            onGainChange(busIndex, [indexOffset + idxLeft, indexOffset + idxRight], db, startDb);
+          }}
+          onSoloToggle={() => {
+            onSoloToggle(busIndex, [indexOffset + idxLeft, indexOffset + idxRight]);
+          }}
+          onMuteToggle={() => {
+            onMuteToggle(busIndex, [indexOffset + idxLeft, indexOffset + idxRight]);
+          }}
+        />
+      );
+      i += 2;
+    } else {
+      const idx = i;
+      elements.push(
+        <ChannelStrip
+          key={`${current.type}-${current.index}`}
+          input={current}
+          gainDb={gains[idx] ?? -80}
+          soloed={solos[idx] ?? false}
+          muted={mutes[idx] ?? false}
+          level={levels[idx] ?? 0}
+          onGainChange={(db, startDb) => onGainChange(busIndex, indexOffset + idx, db, startDb)}
+          onSoloToggle={() => onSoloToggle(busIndex, indexOffset + idx)}
+          onMuteToggle={() => onMuteToggle(busIndex, indexOffset + idx)}
+        />
+      );
+      i += 1;
+    }
+  }
 
   return (
     <div>
-      <div className="flex gap-0.5">
-        {inputs.map((input, i) => (
-          <ChannelStrip
-            key={`${input.type}-${input.index}`}
-            input={input}
-            gainDb={gains[i] ?? -80}
-            soloed={solos[i] ?? false}
-            muted={mutes[i] ?? false}
-            level={levels[i] ?? 0}
-            onGainChange={(db) => onGainChange(busIndex, indexOffset + i, db)}
-            onSoloToggle={() => onSoloToggle(busIndex, indexOffset + i)}
-            onMuteToggle={() => onMuteToggle(busIndex, indexOffset + i)}
-          />
-        ))}
-      </div>
+      <div className="flex gap-0.5">{elements}</div>
       <div className="text-[10px] text-neutral-500 uppercase tracking-wider text-center mt-1">{label}</div>
     </div>
   );
@@ -196,12 +357,10 @@ function BusButton({ isActive, label, customName, onClick, onRename }: {
 }
 
 export default function Mixer() {
-  const { state, loading, sendCommand, getLabel, setLabel } = useDevice();
+  const { state, loading, sendCommand, getLabel, setLabel, setSubAssignment, setBusMaster, setMasterDb } = useDevice();
   const meters = useMeters();
   const [activeBus, setActiveBus] = useState(0);
-  const [busMasters, setBusMasters] = useState<Record<number, number>>({});
-  const [subAssignments, setSubAssignments] = useState<[number, number, number, number]>([0, 1, 2, 3]);
-  const [masterDb, setMasterDb] = useState(0);
+  const [dragStartGains, setDragStartGains] = useState<Record<string, number>>({});
 
   if (loading || !state) {
     return (
@@ -220,44 +379,44 @@ export default function Mixer() {
   }
 
   const busCount = state.port_counts.mix.outputs;
+  const subAssignments = state.sub_assignments ?? [0, 1, 2, 3];
+  const busMasters = state.bus_masters ?? Array(12).fill(0);
+  const masterDb = state.master_db ?? 0;
 
   const handleBusRename = (index: number, name: string) => {
-    setLabel("buses", String(index), name);
-  };
-
-  const handleBusMasterChange = (busIndex: number, db: number) => {
-    setBusMasters((prev) => ({ ...prev, [busIndex]: db }));
-    // Apply bus master as absolute gain for all channels in this bus.
-    // This sets every crosspoint in the bus to the master level.
-    // In a real VCA implementation, we'd store individual offsets and
-    // multiply, but for now this gives immediate audible feedback.
-    sendCommand({ type: "set_bus_gains", payload: { mix: busIndex, gain_db: db } });
-  };
-
-  const handleSubAssignment = (subIndex: number, busIndex: number) => {
-    setSubAssignments((prev) => {
-      const next = [...prev] as [number, number, number, number];
-      next[subIndex] = busIndex;
-      return next;
+    const prevName = getLabel("buses", String(index), "");
+    setLabel("buses", String(index), name, {
+      description: `Rename Bus ${busLabelFn(index)}${prevName ? ` ("${prevName}")` : ""} to "${name}"`
     });
   };
 
-  const handleMasterChange = (db: number) => {
-    const prevDb = masterDb;
-    setMasterDb(db);
-    // Apply master offset delta to all active sub faders
-    const delta = db - prevDb;
-    for (const assignedBus of subAssignments) {
-      const currentBusMaster = busMasters[assignedBus] ?? 0;
-      const newBusMaster = Math.max(-80, Math.min(6, currentBusMaster + delta));
-      setBusMasters((prev) => ({ ...prev, [assignedBus]: newBusMaster }));
-      sendCommand({ type: "set_bus_gains", payload: { mix: assignedBus, gain_db: newBusMaster } });
-    }
+  const handleBusMasterChange = (busIndex: number, db: number, startDb?: number) => {
+    const options = startDb !== undefined ? {
+      undoDb: startDb,
+      description: `Adjust VCA Bus ${busLabelFn(busIndex)}${getLabel("buses", String(busIndex), "") ? ` ("${getLabel("buses", String(busIndex), "")}")` : ""} fader`
+    } : undefined;
+    setBusMaster(busIndex, db, options);
+  };
+
+  const handleSubAssignment = (subIndex: number, busIndex: number) => {
+    const oldAssignments = state.sub_assignments ?? [0, 1, 2, 3];
+    const prevBus = oldAssignments[subIndex];
+    setSubAssignment(subIndex, busIndex, {
+      undoBus: prevBus,
+      description: `Assign VCA Master ${subIndex + 1} to Bus ${busLabelFn(busIndex)}`
+    });
+  };
+
+  const handleMasterChange = (db: number, startDb?: number) => {
+    const options = startDb !== undefined ? {
+      undoDb: startDb,
+      description: "Adjust Master volume"
+    } : undefined;
+    setMasterDb(db, options);
   };
 
   const busGains = state.mixer.gains[activeBus] ?? [];
   const busSolos = state.mixer.soloed[activeBus] ?? [];
-  // Mutes derived from gains (channel is "muted" if gain is -80)
   const busMutes = busGains.map((g) => g <= -80);
 
   const hasTalkback = state.features.has_talkback;
@@ -268,19 +427,133 @@ export default function Mixer() {
   const adat = state.inputs.filter((i) => i.type === "adat");
   const meterLevels = meters;
 
-  const handleGainChange = (bus: number, ch: number, db: number) => {
-    sendCommand({ type: "set_mix_gain", payload: { mix: bus, channel: ch, gain_db: db } });
+  const handleGainChange = (bus: number, ch: number | [number, number], db: number, startDb?: number) => {
+    if (Array.isArray(ch)) {
+      const [chL, chR] = ch;
+      const inputL = state.inputs[chL];
+      const inputR = state.inputs[chR];
+      const labelL = inputL ? getLabel("inputs", `${inputL.type}_${inputL.index}`, `${chL + 1}`) : `${chL + 1}`;
+      const labelR = inputR ? getLabel("inputs", `${inputR.type}_${inputR.index}`, `${chR + 1}`) : `${chR + 1}`;
+      const channelLabel = `${labelL} + ${labelR}`;
+
+      const redoMsgs: ClientMessage[] = [
+        { type: "set_mix_gain" as const, payload: { mix: bus, channel: chL, gain_db: db } },
+        { type: "set_mix_gain" as const, payload: { mix: bus, channel: chR, gain_db: db } },
+      ];
+      const undoMsgs: ClientMessage[] = startDb !== undefined ? [
+        { type: "set_mix_gain" as const, payload: { mix: bus, channel: chL, gain_db: startDb } },
+        { type: "set_mix_gain" as const, payload: { mix: bus, channel: chR, gain_db: startDb } },
+      ] : [];
+
+      const options = startDb !== undefined ? {
+        undo: undoMsgs,
+        description: `Adjust fader on ${channelLabel} (Mix ${busLabelFn(bus)})`
+      } : undefined;
+
+      sendCommand(redoMsgs, options);
+    } else {
+      const input = state.inputs[ch];
+      const defaultLabel = input ? (input.type === "spdif" ? `S/PDIF ${input.index === 0 ? "L" : "R"}` : `${input.type === "adat" ? "ADAT " : ""}${input.index + 1}`) : `Ch ${ch + 1}`;
+      const channelLabel = input ? getLabel("inputs", `${input.type}_${input.index}`, defaultLabel) : `Ch ${ch + 1}`;
+      const options = startDb !== undefined ? {
+        undo: { type: "set_mix_gain" as const, payload: { mix: bus, channel: ch, gain_db: startDb } },
+        description: `Adjust fader on ${channelLabel} (Mix ${busLabelFn(bus)})`
+      } : undefined;
+      sendCommand({ type: "set_mix_gain" as const, payload: { mix: bus, channel: ch, gain_db: db } }, options);
+    }
   };
-  const handleSoloToggle = (bus: number, ch: number) => {
-    const currentSoloed = state.mixer.soloed[bus]?.[ch] ?? false;
-    sendCommand({ type: "set_mix_solo", payload: { mix: bus, channel: ch, soloed: !currentSoloed } });
+
+  const handleSoloToggle = (bus: number, ch: number | [number, number]) => {
+    if (Array.isArray(ch)) {
+      const [chL, chR] = ch;
+      const currentSoloedL = state.mixer.soloed[bus]?.[chL] ?? false;
+      const currentSoloedR = state.mixer.soloed[bus]?.[chR] ?? false;
+      const targetSoloed = !(currentSoloedL || currentSoloedR);
+
+      const inputL = state.inputs[chL];
+      const inputR = state.inputs[chR];
+      const labelL = inputL ? getLabel("inputs", `${inputL.type}_${inputL.index}`, `${chL + 1}`) : `${chL + 1}`;
+      const labelR = inputR ? getLabel("inputs", `${inputR.type}_${inputR.index}`, `${chR + 1}`) : `${chR + 1}`;
+      const channelLabel = `${labelL} + ${labelR}`;
+
+      const redoMsgs: ClientMessage[] = [];
+      const undoMsgs: ClientMessage[] = [];
+
+      if (currentSoloedL !== targetSoloed) {
+        redoMsgs.push({ type: "set_mix_solo" as const, payload: { mix: bus, channel: chL, soloed: targetSoloed } });
+        undoMsgs.push({ type: "set_mix_solo" as const, payload: { mix: bus, channel: chL, soloed: currentSoloedL } });
+      }
+      if (currentSoloedR !== targetSoloed) {
+        redoMsgs.push({ type: "set_mix_solo" as const, payload: { mix: bus, channel: chR, soloed: targetSoloed } });
+        undoMsgs.push({ type: "set_mix_solo" as const, payload: { mix: bus, channel: chR, soloed: currentSoloedR } });
+      }
+
+      if (redoMsgs.length > 0) {
+        sendCommand(redoMsgs, {
+          undo: undoMsgs,
+          description: `${targetSoloed ? "Solo" : "Unsolo"} ${channelLabel} (Mix ${busLabelFn(bus)})`
+        });
+      }
+    } else {
+      const currentSoloed = state.mixer.soloed[bus]?.[ch] ?? false;
+      const input = state.inputs[ch];
+      const defaultLabel = input ? (input.type === "spdif" ? `S/PDIF ${input.index === 0 ? "L" : "R"}` : `${input.type === "adat" ? "ADAT " : ""}${input.index + 1}`) : `Ch ${ch + 1}`;
+      const channelLabel = input ? getLabel("inputs", `${input.type}_${input.index}`, defaultLabel) : `Ch ${ch + 1}`;
+      sendCommand(
+        { type: "set_mix_solo" as const, payload: { mix: bus, channel: ch, soloed: !currentSoloed } },
+        {
+          undo: { type: "set_mix_solo" as const, payload: { mix: bus, channel: ch, soloed: currentSoloed } },
+          description: `${currentSoloed ? "Unsolo" : "Solo"} ${channelLabel} (Mix ${busLabelFn(bus)})`
+        }
+      );
+    }
   };
-  const handleMuteToggle = (bus: number, ch: number) => {
-    const currentMuted = busGains[ch] !== undefined && busGains[ch]! <= -80;
-    sendCommand({
-      type: "set_mix_gain",
-      payload: { mix: bus, channel: ch, gain_db: currentMuted ? 0 : -80 },
-    });
+
+  const handleMuteToggle = (bus: number, ch: number | [number, number]) => {
+    if (Array.isArray(ch)) {
+      const [chL, chR] = ch;
+      const busGains = state.mixer.gains[bus] ?? [];
+      const currentMutedL = busGains[chL] !== undefined && busGains[chL]! <= -80;
+      const currentMutedR = busGains[chR] !== undefined && busGains[chR]! <= -80;
+      const targetMuted = !(currentMutedL || currentMutedR);
+
+      const inputL = state.inputs[chL];
+      const inputR = state.inputs[chR];
+      const labelL = inputL ? getLabel("inputs", `${inputL.type}_${inputL.index}`, `${chL + 1}`) : `${chL + 1}`;
+      const labelR = inputR ? getLabel("inputs", `${inputR.type}_${inputR.index}`, `${chR + 1}`) : `${chR + 1}`;
+      const channelLabel = `${labelL} + ${labelR}`;
+
+      const redoMsgs: ClientMessage[] = [];
+      const undoMsgs: ClientMessage[] = [];
+
+      if (currentMutedL !== targetMuted) {
+        redoMsgs.push({ type: "set_mix_gain" as const, payload: { mix: bus, channel: chL, gain_db: targetMuted ? -80 : 0 } });
+        undoMsgs.push({ type: "set_mix_gain" as const, payload: { mix: bus, channel: chL, gain_db: currentMutedL ? -80 : 0 } });
+      }
+      if (currentMutedR !== targetMuted) {
+        redoMsgs.push({ type: "set_mix_gain" as const, payload: { mix: bus, channel: chR, gain_db: targetMuted ? -80 : 0 } });
+        undoMsgs.push({ type: "set_mix_gain" as const, payload: { mix: bus, channel: chR, gain_db: currentMutedR ? -80 : 0 } });
+      }
+
+      if (redoMsgs.length > 0) {
+        sendCommand(redoMsgs, {
+          undo: undoMsgs,
+          description: `${targetMuted ? "Mute" : "Unmute"} ${channelLabel} (Mix ${busLabelFn(bus)})`
+        });
+      }
+    } else {
+      const currentMuted = busGains[ch] !== undefined && busGains[ch]! <= -80;
+      const input = state.inputs[ch];
+      const defaultLabel = input ? (input.type === "spdif" ? `S/PDIF ${input.index === 0 ? "L" : "R"}` : `${input.type === "adat" ? "ADAT " : ""}${input.index + 1}`) : `Ch ${ch + 1}`;
+      const channelLabel = input ? getLabel("inputs", `${input.type}_${input.index}`, defaultLabel) : `Ch ${ch + 1}`;
+      sendCommand(
+        { type: "set_mix_gain" as const, payload: { mix: bus, channel: ch, gain_db: currentMuted ? 0 : -80 } },
+        {
+          undo: { type: "set_mix_gain" as const, payload: { mix: bus, channel: ch, gain_db: currentMuted ? -80 : 0 } },
+          description: `${currentMuted ? "Unmute" : "Mute"} ${channelLabel} (Mix ${busLabelFn(bus)})`
+        }
+      );
+    }
   };
 
   return (
@@ -303,7 +576,23 @@ export default function Mixer() {
         {/* Clear Solo — visible when any channel is soloed */}
         {state.mixer.soloed.some((bus) => bus.some((s) => s)) && (
           <button
-            onClick={() => sendCommand({ type: "clear_solo", payload: {} })}
+            onClick={() => {
+              const undoMsgs: ClientMessage[] = [];
+              state.mixer.soloed.forEach((bus, busIdx) => {
+                bus.forEach((isSoloed, chIdx) => {
+                  if (isSoloed) {
+                    undoMsgs.push({
+                      type: "set_mix_solo" as const,
+                      payload: { mix: busIdx, channel: chIdx, soloed: true }
+                    });
+                  }
+                });
+              });
+              sendCommand(
+                { type: "clear_solo", payload: {} },
+                { undo: undoMsgs, description: "Clear all solo channels" }
+              );
+            }}
             className="ml-2 text-[9px] font-bold px-2 py-1 rounded bg-amber-600 text-black hover:bg-amber-500 flex-shrink-0"
           >
             CLEAR SOLO
@@ -388,6 +677,21 @@ export default function Mixer() {
             {/* 4 assignable sub faders */}
             {subAssignments.map((assignedBus, subIdx) => {
               const subDb = busMasters[assignedBus] ?? 0;
+              const handleStart = () => {
+                setDragStartGains((prev) => ({ ...prev, ["sub_" + assignedBus]: subDb }));
+              };
+              const handleEnd = () => {
+                const startDb = dragStartGains["sub_" + assignedBus];
+                if (startDb !== undefined && startDb !== subDb) {
+                  handleBusMasterChange(assignedBus, subDb, startDb);
+                }
+                setDragStartGains((prev) => {
+                  const next = { ...prev };
+                  delete next["sub_" + assignedBus];
+                  return next;
+                });
+              };
+
               return (
                 <div key={subIdx} className="flex flex-col items-center gap-1 px-2 py-2 bg-neutral-800/50 rounded-lg min-w-[56px]">
                   {/* Bus assignment dropdown */}
@@ -419,6 +723,12 @@ export default function Mixer() {
                         min={0}
                         max={100}
                         value={dbToNormalized(subDb) * 100}
+                        onFocus={handleStart}
+                        onMouseDown={handleStart}
+                        onTouchStart={handleStart}
+                        onBlur={handleEnd}
+                        onMouseUp={handleEnd}
+                        onTouchEnd={handleEnd}
                         onChange={(e) => {
                           const norm = Number(e.target.value) / 100;
                           handleBusMasterChange(assignedBus, normalizedToDb(norm));
@@ -438,37 +748,62 @@ export default function Mixer() {
             })}
 
             {/* Master fader */}
-            <div className="flex flex-col items-center gap-1 px-2 py-2 bg-neutral-700/50 rounded-lg min-w-[56px] border border-neutral-600">
-              <span className="text-[10px] text-red-400 font-bold">MAIN</span>
+            {(() => {
+              const handleMasterStart = () => {
+                setDragStartGains((prev) => ({ ...prev, master: masterDb }));
+              };
+              const handleMasterEnd = () => {
+                const startDb = dragStartGains.master;
+                if (startDb !== undefined && startDb !== masterDb) {
+                  handleMasterChange(masterDb, startDb);
+                }
+                setDragStartGains((prev) => {
+                  const next = { ...prev };
+                  delete next.master;
+                  return next;
+                });
+              };
 
-              <div className="flex gap-1 items-end">
-                <div className="w-2 h-32 bg-neutral-800 rounded-sm overflow-hidden flex flex-col-reverse">
-                  <div
-                    className="bg-red-500 rounded-sm"
-                    style={{ height: `${Math.max(0, Math.min(100, dbToNormalized(masterDb) * 100))}%` }}
-                  />
-                </div>
-                <div className="flex flex-col items-center gap-1">
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    value={dbToNormalized(masterDb) * 100}
-                    onChange={(e) => {
-                      const norm = Number(e.target.value) / 100;
-                      handleMasterChange(normalizedToDb(norm));
-                    }}
-                    className="h-32 appearance-none cursor-pointer accent-red-500"
-                    style={{ writingMode: "vertical-lr" as React.CSSProperties["writingMode"], direction: "rtl" }}
-                  />
-                  <span className="text-[8px] text-neutral-400 font-mono w-10 text-center">
-                    {formatDb(masterDb)}
-                  </span>
-                </div>
-              </div>
+              return (
+                <div className="flex flex-col items-center gap-1 px-2 py-2 bg-neutral-700/50 rounded-lg min-w-[56px] border border-neutral-600">
+                  <span className="text-[10px] text-red-400 font-bold">MAIN</span>
 
-              <span className="text-[8px] text-red-400 font-bold">MASTER</span>
-            </div>
+                  <div className="flex gap-1 items-end">
+                    <div className="w-2 h-32 bg-neutral-800 rounded-sm overflow-hidden flex flex-col-reverse">
+                      <div
+                        className="bg-red-500 rounded-sm"
+                        style={{ height: `${Math.max(0, Math.min(100, dbToNormalized(masterDb) * 100))}%` }}
+                      />
+                    </div>
+                    <div className="flex flex-col items-center gap-1">
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        value={dbToNormalized(masterDb) * 100}
+                        onFocus={handleMasterStart}
+                        onMouseDown={handleMasterStart}
+                        onTouchStart={handleMasterStart}
+                        onBlur={handleMasterEnd}
+                        onMouseUp={handleMasterEnd}
+                        onTouchEnd={handleMasterEnd}
+                        onChange={(e) => {
+                          const norm = Number(e.target.value) / 100;
+                          handleMasterChange(normalizedToDb(norm));
+                        }}
+                        className="h-32 appearance-none cursor-pointer accent-red-500"
+                        style={{ writingMode: "vertical-lr" as React.CSSProperties["writingMode"], direction: "rtl" }}
+                      />
+                      <span className="text-[8px] text-neutral-400 font-mono w-10 text-center">
+                        {formatDb(masterDb)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <span className="text-[8px] text-red-400 font-bold">MASTER</span>
+                </div>
+              );
+            })()}
           </div>
         </div>
       </div>

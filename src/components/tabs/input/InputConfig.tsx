@@ -1,5 +1,6 @@
-import type { DeviceState, InputState } from "../../../types";
+import type { DeviceState, InputState, ClientMessage } from "../../../types";
 import { useDevice, type InputStereoPairConfig } from "../../../hooks/useDevice";
+
 
 interface InputConfigProps {
   state: DeviceState;
@@ -20,12 +21,63 @@ function ToggleBadge({ label, active, onClick }: { label: string; active: boolea
   );
 }
 
+import { useState, useEffect } from "react";
+
+function PairNameInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
+  const [val, setVal] = useState(value);
+  useEffect(() => {
+    setVal(value);
+  }, [value]);
+
+  const handleCommit = () => {
+    if (val !== value) {
+      onChange(val);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      (e.target as HTMLInputElement).blur();
+    }
+  };
+
+  return (
+    <input
+      type="text"
+      value={val}
+      onChange={(e) => setVal(e.target.value)}
+      onBlur={handleCommit}
+      onKeyDown={handleKeyDown}
+      placeholder={placeholder}
+      className="text-xs bg-neutral-800 border border-neutral-700 rounded px-2 py-1 flex-1 text-neutral-300 focus:border-neutral-500 focus:outline-none"
+    />
+  );
+}
+
+
 function InputRow({ input, onToggle, customLabel, onLabelChange }: {
   input: InputState;
   onToggle: (feature: string) => void;
   customLabel: string;
   onLabelChange: (value: string) => void;
 }) {
+  const [val, setVal] = useState(customLabel);
+  useEffect(() => {
+    setVal(customLabel);
+  }, [customLabel]);
+
+  const handleCommit = () => {
+    if (val !== customLabel) {
+      onLabelChange(val);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      (e.target as HTMLInputElement).blur();
+    }
+  };
+
   return (
     <div className="flex items-center gap-3 py-2 border-b border-neutral-800">
       <span className="text-xs text-neutral-300 w-28">{customLabel || input.name}</span>
@@ -46,8 +98,10 @@ function InputRow({ input, onToggle, customLabel, onLabelChange }: {
 
       <input
         type="text"
-        value={customLabel}
-        onChange={(e) => onLabelChange(e.target.value)}
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        onBlur={handleCommit}
+        onKeyDown={handleKeyDown}
         placeholder={input.name}
         className="text-xs bg-neutral-800 border border-neutral-700 rounded px-2 py-1 w-32 text-neutral-300 placeholder-neutral-600 focus:border-neutral-500 focus:outline-none"
       />
@@ -60,6 +114,23 @@ function DawChannelRow({ defaultLabel, customLabel, onLabelChange }: {
   customLabel: string;
   onLabelChange: (value: string) => void;
 }) {
+  const [val, setVal] = useState(customLabel);
+  useEffect(() => {
+    setVal(customLabel);
+  }, [customLabel]);
+
+  const handleCommit = () => {
+    if (val !== customLabel) {
+      onLabelChange(val);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      (e.target as HTMLInputElement).blur();
+    }
+  };
+
   return (
     <div className="flex items-center gap-3 py-2 border-b border-neutral-800">
       <span className="text-xs text-neutral-300 w-28">{customLabel || defaultLabel}</span>
@@ -67,8 +138,10 @@ function DawChannelRow({ defaultLabel, customLabel, onLabelChange }: {
       <div className="flex-1" />
       <input
         type="text"
-        value={customLabel}
-        onChange={(e) => onLabelChange(e.target.value)}
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        onBlur={handleCommit}
+        onKeyDown={handleKeyDown}
         placeholder={defaultLabel}
         className="text-xs bg-neutral-800 border border-neutral-700 rounded px-2 py-1 w-32 text-neutral-300 placeholder-neutral-600 focus:border-neutral-500 focus:outline-none"
       />
@@ -132,12 +205,10 @@ function InputPairSection({ label, inputs, pairs, onTogglePair, onRenamePair }: 
               {isLinked ? "Linked" : "Unlinked"}
             </button>
             {isLinked ? (
-              <input
-                type="text"
+              <PairNameInput
                 value={pairName}
-                onChange={(e) => onRenamePair(left.index, right.index, left.type, e.target.value)}
+                onChange={(v) => onRenamePair(left.index, right.index, left.type, v)}
                 placeholder={`${left.name} / ${right.name}`}
-                className="text-xs bg-neutral-800 border border-neutral-700 rounded px-2 py-1 flex-1 text-neutral-300 focus:border-neutral-500 focus:outline-none"
               />
             ) : (
               <span className="text-xs text-neutral-400">
@@ -166,46 +237,86 @@ export default function InputConfig({ state }: InputConfigProps) {
     const existing = inputStereoPairs.find(
       (p) => p.left === left && p.right === right && p.input_type === inputType
     );
+    const label = `${inputType === "spdif" ? "S/PDIF" : inputType.toUpperCase()} ${left + 1}/${right + 1}`;
+    const isLinking = existing ? !existing.linked : true;
+    const actionDesc = `${isLinking ? "Link" : "Unlink"} ${label}`;
+
     if (existing) {
       setInputStereoPairs(
         inputStereoPairs.map((p) =>
           p.left === left && p.right === right && p.input_type === inputType
             ? { ...p, linked: !p.linked }
             : p
-        )
+        ),
+        { description: actionDesc }
       );
     } else {
       setInputStereoPairs([
         ...inputStereoPairs,
         { left, right, name: "", linked: true, input_type: inputType },
-      ]);
+      ], { description: actionDesc });
     }
   };
 
   const handleRenamePair = (left: number, right: number, inputType: string, name: string) => {
+    const existing = inputStereoPairs.find(
+      (p) => p.left === left && p.right === right && p.input_type === inputType
+    );
+    const prevName = existing?.name ?? "";
+    const label = `${inputType === "spdif" ? "S/PDIF" : inputType.toUpperCase()} ${left + 1}/${right + 1}`;
+
     setInputStereoPairs(
       inputStereoPairs.map((p) =>
         p.left === left && p.right === right && p.input_type === inputType
           ? { ...p, name }
           : p
-      )
+      ),
+      {
+        description: `Rename stereo pair ${label}${prevName ? ` ("${prevName}")` : ""} to "${name}"`
+      }
     );
   };
 
   const handleToggle = (input: InputState, feature: string) => {
-    switch (feature) {
-      case "pad":
-        sendCommand({ type: "set_input_pad", payload: { index: input.index, enabled: !input.pad } });
-        break;
-      case "air":
-        sendCommand({ type: "set_input_air", payload: { index: input.index, enabled: !input.air } });
-        break;
-      case "phantom":
-        sendCommand({ type: "set_input_phantom", payload: { group: input.index, enabled: !input.phantom } });
-        break;
-      case "inst":
-        sendCommand({ type: "set_input_inst", payload: { index: input.index, enabled: !input.inst } });
-        break;
+    const linkedPair = inputStereoPairs.find(
+      (p) => p.linked && p.input_type === input.type && (p.left === input.index || p.right === input.index)
+    );
+    const targetIndices = linkedPair ? [linkedPair.left, linkedPair.right] : [input.index];
+
+    const redoMsgs: ClientMessage[] = [];
+    const undoMsgs: ClientMessage[] = [];
+
+    targetIndices.forEach((idx) => {
+      switch (feature) {
+        case "pad":
+          redoMsgs.push({ type: "set_input_pad", payload: { index: idx, enabled: !input.pad } });
+          undoMsgs.push({ type: "set_input_pad", payload: { index: idx, enabled: input.pad } });
+          break;
+        case "air":
+          redoMsgs.push({ type: "set_input_air", payload: { index: idx, enabled: !input.air } });
+          undoMsgs.push({ type: "set_input_air", payload: { index: idx, enabled: input.air } });
+          break;
+        case "phantom":
+          redoMsgs.push({ type: "set_input_phantom", payload: { group: idx, enabled: !input.phantom } });
+          undoMsgs.push({ type: "set_input_phantom", payload: { group: idx, enabled: input.phantom } });
+          break;
+        case "inst":
+          redoMsgs.push({ type: "set_input_inst", payload: { index: idx, enabled: !input.inst } });
+          undoMsgs.push({ type: "set_input_inst", payload: { index: idx, enabled: input.inst } });
+          break;
+      }
+    });
+
+    if (redoMsgs.length > 0) {
+      const defaultLabel = input.type === "spdif"
+        ? `S/${input.index === 0 ? "L" : "R"}`
+        : input.type === "adat"
+        ? `AD${input.index + 1}`
+        : `${input.index + 1}`;
+      const label = getLabel("inputs", `${input.type}_${input.index}`, defaultLabel);
+      const isFeatureActive = input[feature as keyof InputState];
+      const description = `${!isFeatureActive ? "Enable" : "Disable"} ${feature.toUpperCase()} on ${label}`;
+      sendCommand(redoMsgs, { undo: undoMsgs, description });
     }
   };
 
@@ -227,45 +338,69 @@ export default function InputConfig({ state }: InputConfigProps) {
       {analogue.length > 0 && (
         <div className="mb-4">
           <h4 className="text-[10px] text-neutral-500 uppercase tracking-wider mb-1">Analogue Inputs</h4>
-          {analogue.map((input) => (
-            <InputRow
-              key={`${input.type}-${input.index}`}
-              input={input}
-              onToggle={(f) => handleToggle(input, f)}
-              customLabel={getLabel("inputs", `${input.type}_${input.index}`, "")}
-              onLabelChange={(v) => setLabel("inputs", `${input.type}_${input.index}`, v)}
-            />
-          ))}
+          {analogue.map((input) => {
+            const defaultLabel = `${input.index + 1}`;
+            return (
+              <InputRow
+                key={`${input.type}-${input.index}`}
+                input={input}
+                onToggle={(f) => handleToggle(input, f)}
+                customLabel={getLabel("inputs", `${input.type}_${input.index}`, "")}
+                onLabelChange={(v) => {
+                  const prev = getLabel("inputs", `${input.type}_${input.index}`, "");
+                  setLabel("inputs", `${input.type}_${input.index}`, v, {
+                    description: `Rename input Analogue ${defaultLabel}${prev ? ` ("${prev}")` : ""} to "${v}"`
+                  });
+                }}
+              />
+            );
+          })}
         </div>
       )}
 
       {spdif.length > 0 && (
         <div className="mb-4">
           <h4 className="text-[10px] text-neutral-500 uppercase tracking-wider mb-1">S/PDIF Inputs</h4>
-          {spdif.map((input) => (
-            <InputRow
-              key={`${input.type}-${input.index}`}
-              input={input}
-              onToggle={(f) => handleToggle(input, f)}
-              customLabel={getLabel("inputs", `${input.type}_${input.index}`, "")}
-              onLabelChange={(v) => setLabel("inputs", `${input.type}_${input.index}`, v)}
-            />
-          ))}
+          {spdif.map((input) => {
+            const defaultLabel = `S/${input.index === 0 ? "L" : "R"}`;
+            return (
+              <InputRow
+                key={`${input.type}-${input.index}`}
+                input={input}
+                onToggle={(f) => handleToggle(input, f)}
+                customLabel={getLabel("inputs", `${input.type}_${input.index}`, "")}
+                onLabelChange={(v) => {
+                  const prev = getLabel("inputs", `${input.type}_${input.index}`, "");
+                  setLabel("inputs", `${input.type}_${input.index}`, v, {
+                    description: `Rename input S/PDIF ${defaultLabel}${prev ? ` ("${prev}")` : ""} to "${v}"`
+                  });
+                }}
+              />
+            );
+          })}
         </div>
       )}
 
       {adat.length > 0 && (
         <div className="mb-4">
           <h4 className="text-[10px] text-neutral-500 uppercase tracking-wider mb-1">ADAT Inputs</h4>
-          {adat.map((input) => (
-            <InputRow
-              key={`${input.type}-${input.index}`}
-              input={input}
-              onToggle={(f) => handleToggle(input, f)}
-              customLabel={getLabel("inputs", `${input.type}_${input.index}`, "")}
-              onLabelChange={(v) => setLabel("inputs", `${input.type}_${input.index}`, v)}
-            />
-          ))}
+          {adat.map((input) => {
+            const defaultLabel = `AD${input.index + 1}`;
+            return (
+              <InputRow
+                key={`${input.type}-${input.index}`}
+                input={input}
+                onToggle={(f) => handleToggle(input, f)}
+                customLabel={getLabel("inputs", `${input.type}_${input.index}`, "")}
+                onLabelChange={(v) => {
+                  const prev = getLabel("inputs", `${input.type}_${input.index}`, "");
+                  setLabel("inputs", `${input.type}_${input.index}`, v, {
+                    description: `Rename input ADAT ${defaultLabel}${prev ? ` ("${prev}")` : ""} to "${v}"`
+                  });
+                }}
+              />
+            );
+          })}
         </div>
       )}
 
@@ -278,7 +413,12 @@ export default function InputConfig({ state }: InputConfigProps) {
               input={input}
               onToggle={(f) => handleToggle(input, f)}
               customLabel={getLabel("inputs", `${input.type}_${input.index}`, "")}
-              onLabelChange={(v) => setLabel("inputs", `${input.type}_${input.index}`, v)}
+              onLabelChange={(v) => {
+                const prev = getLabel("inputs", `${input.type}_${input.index}`, "");
+                setLabel("inputs", `${input.type}_${input.index}`, v, {
+                  description: `Rename Talkback${prev ? ` ("${prev}")` : ""} to "${v}"`
+                });
+              }}
             />
           ))}
         </div>
@@ -310,7 +450,12 @@ export default function InputConfig({ state }: InputConfigProps) {
               key={i}
               defaultLabel={`DAW Out ${i + 1}`}
               customLabel={getLabel("pcm", `pcm_out_${i}`, "")}
-              onLabelChange={(v) => setLabel("pcm", `pcm_out_${i}`, v)}
+              onLabelChange={(v) => {
+                const prev = getLabel("pcm", `pcm_out_${i}`, "");
+                setLabel("pcm", `pcm_out_${i}`, v, {
+                  description: `Rename DAW channel ${i + 1}${prev ? ` ("${prev}")` : ""} to "${v}"`
+                });
+              }}
             />
           ))}
         </div>
