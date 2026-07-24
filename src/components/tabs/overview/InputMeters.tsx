@@ -1,6 +1,6 @@
 import type { DeviceState, InputState } from "../../../types";
 import { useDevice } from "../../../hooks/useDevice";
-import { useMeters } from "../../../hooks/useMeterStore";
+import { useSmoothedMeters } from "../../../hooks/useMeterStore";
 import MeterBar from "../../MeterBar";
 
 interface InputMetersProps {
@@ -38,7 +38,7 @@ function InputGroup({ label, inputs, levels }: { label: string; inputs: InputSta
 }
 
 export default function InputMeters({ state }: InputMetersProps) {
-  const meters = useMeters();
+  const meters = useSmoothedMeters();
 
   const hasTalkback = state.features.has_talkback;
 

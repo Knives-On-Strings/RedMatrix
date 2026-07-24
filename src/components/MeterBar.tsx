@@ -35,13 +35,13 @@ export default function MeterBar({ level, height = "h-24", width = "w-3" }: Mete
     <div className={`${width} ${height} bg-neutral-800 rounded-sm overflow-hidden relative`}>
       {/* Level bar (grows from bottom) */}
       <div
-        className={`absolute bottom-0 left-0 right-0 ${meterColor(level)} rounded-sm transition-all duration-75`}
+        className={`absolute bottom-0 left-0 right-0 ${meterColor(level)} rounded-sm`}
         style={{ height: `${h}%` }}
       />
       {/* Peak hold line */}
       {peakH > 1 && (
         <div
-          className={`absolute left-0 right-0 ${peakColor} transition-all duration-150`}
+          className={`absolute left-0 right-0 ${peakColor}`}
           style={{ bottom: `${peakH}%`, height: "1.5px" }}
         />
       )}

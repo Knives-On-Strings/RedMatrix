@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { InputState, ClientMessage } from "../../types";
 import { useDevice } from "../../hooks/useDevice";
-import { useMeters } from "../../hooks/useMeterStore";
+import { useSmoothedMeters } from "../../hooks/useMeterStore";
 import { dbToNormalized, normalizedToDb, formatDb, busLabel as busLabelFn } from "../../constants";
 import MeterBar from "../MeterBar";
 
@@ -358,7 +358,7 @@ function BusButton({ isActive, label, customName, onClick, onRename }: {
 
 export default function Mixer() {
   const { state, loading, sendCommand, getLabel, setLabel, setSubAssignment, setBusMaster, setMasterDb } = useDevice();
-  const meters = useMeters();
+  const meters = useSmoothedMeters();
   const [activeBus, setActiveBus] = useState(0);
   const [dragStartGains, setDragStartGains] = useState<Record<string, number>>({});
 

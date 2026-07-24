@@ -1,5 +1,5 @@
 import type { DeviceState, OutputState } from "../../../types";
-import { useMeters } from "../../../hooks/useMeterStore";
+import { useSmoothedMeters } from "../../../hooks/useMeterStore";
 
 interface OutputLevelsProps {
   state: DeviceState;
@@ -25,7 +25,7 @@ function OutputRow({ output, isInactive, level }: { output: OutputState; isInact
       ))}
       <div className="flex-1 h-2 bg-neutral-800 rounded-full overflow-hidden">
         <div
-          className="h-full bg-green-500 rounded-full transition-all duration-75"
+          className="h-full bg-green-500 rounded-full"
           style={{ width: `${width}%` }}
         />
       </div>
@@ -37,7 +37,7 @@ function OutputRow({ output, isInactive, level }: { output: OutputState; isInact
 }
 
 export default function OutputLevels({ state }: OutputLevelsProps) {
-  const meters = useMeters();
+  const meters = useSmoothedMeters();
   const isAlt = state.monitor.speaker_switching === "alt";
 
   // Output meters start after input meters in the meter array
