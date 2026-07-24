@@ -1,5 +1,6 @@
 import type { DeviceState, InputState, ClientMessage } from "../../../types";
 import { useDevice, type InputStereoPairConfig } from "../../../hooks/useDevice";
+import PhantomConfirmDialog from "../../PhantomConfirmDialog";
 
 
 interface InputConfigProps {
@@ -224,6 +225,10 @@ function InputPairSection({ label, inputs, pairs, onTogglePair, onRenamePair }: 
 
 export default function InputConfig({ state }: InputConfigProps) {
   const { sendCommand, getLabel, setLabel, inputStereoPairs, setInputStereoPairs } = useDevice();
+  const [phantomPending, setPhantomPending] = useState<{
+    input: InputState;
+    indices: number[];
+  } | null>(null);
 
   const hasTalkback = state.features.has_talkback;
   const allAnalogue = state.inputs.filter((i) => i.type === "analogue");
@@ -283,6 +288,16 @@ export default function InputConfig({ state }: InputConfigProps) {
     );
     const targetIndices = linkedPair ? [linkedPair.left, linkedPair.right] : [input.index];
 
+    // Intercept phantom power ENABLE — show confirmation dialog
+    if (feature === "phantom" && !input.phantom) {
+      setPhantomPending({ input, indices: targetIndices });
+      return;
+    }
+
+    sendToggleCommands(input, feature, targetIndices);
+  };
+
+  const sendToggleCommands = (input: InputState, feature: string, targetIndices: number[]) => {
     const redoMsgs: ClientMessage[] = [];
     const undoMsgs: ClientMessage[] = [];
 
@@ -317,6 +332,13 @@ export default function InputConfig({ state }: InputConfigProps) {
       const isFeatureActive = input[feature as keyof InputState];
       const description = `${!isFeatureActive ? "Enable" : "Disable"} ${feature.toUpperCase()} on ${label}`;
       sendCommand(redoMsgs, { undo: undoMsgs, description });
+    }
+  };
+
+  const handlePhantomConfirm = () => {
+    if (phantomPending) {
+      sendToggleCommands(phantomPending.input, "phantom", phantomPending.indices);
+      setPhantomPending(null);
     }
   };
 
@@ -459,6 +481,14 @@ export default function InputConfig({ state }: InputConfigProps) {
             />
           ))}
         </div>
+      )}
+
+      {phantomPending && (
+        <PhantomConfirmDialog
+          group={`inputs ${phantomPending.indices.map((i) => i + 1).join("-")}`}
+          onConfirm={handlePhantomConfirm}
+          onCancel={() => setPhantomPending(null)}
+        />
       )}
     </div>
   );
