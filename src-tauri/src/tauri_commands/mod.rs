@@ -73,7 +73,17 @@ pub async fn send_command(
     }
 
     // Broadcast change to remote WebSocket clients
-    if !changes.is_empty() {
+    if changes.contains_key("__full_state") {
+        let full_state = app_state.device_state.read().await.clone();
+        if let Ok(state_json) = serde_json::to_value(&full_state) {
+            let update_msg = server::messages::ServerMessage::DeviceState {
+                state: state_json,
+            };
+            if let Ok(json) = serde_json::to_string(&update_msg) {
+                let _ = app_state.broadcast_handle.send_update(json);
+            }
+        }
+    } else if !changes.is_empty() {
         let update_msg = server::messages::ServerMessage::StateUpdate {
             changes: changes.clone().into_iter().collect(),
         };

@@ -216,7 +216,20 @@ pub fn run() {
                                         }
                                     }
 
-                                    if !changes.is_empty() {
+                                    if changes.contains_key("__full_state") {
+                                        // Sample rate (or similar) change rebuilt the whole
+                                        // DeviceState — broadcast a full device_state instead
+                                        // of an incremental state_update.
+                                        let full_state = runner_state.read().await.clone();
+                                        if let Ok(state_json) = serde_json::to_value(&full_state) {
+                                            let update_msg = server::messages::ServerMessage::DeviceState {
+                                                state: state_json,
+                                            };
+                                            if let Ok(json) = serde_json::to_string(&update_msg) {
+                                                let _ = runner_broadcast.send_update(json);
+                                            }
+                                        }
+                                    } else if !changes.is_empty() {
                                         let update_msg = server::messages::ServerMessage::StateUpdate {
                                             changes: changes.clone().into_iter().collect(),
                                         };

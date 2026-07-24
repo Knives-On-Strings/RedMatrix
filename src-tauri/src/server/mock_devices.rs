@@ -209,6 +209,71 @@ fn build_state(config: &DeviceConfig) -> DeviceState {
     }
 }
 
+/// Build a mock DeviceState for a specific sample rate.
+/// Adjusts ADAT, mixer, and PCM port counts per the Scarlett2 spec:
+/// - 88.2/96 kHz: ADAT halved (8→4 for the 18i20 Gen 3)
+/// - 176.4/192 kHz: ADAT zeroed, S/PDIF output zeroed, mixer zeroed, PCM reduced
+pub fn build_state_for_rate(config: &DeviceConfig, rate: u32) -> DeviceState {
+    let mut state = build_state(config);
+    state.sample_rate = rate;
+
+    if matches!(rate, 44100 | 48000) {
+        return state;
+    }
+
+    // Use the device's mux-table-derived port counts for PCM, mixer, and ADAT inputs
+    let active = config.active_port_counts(rate);
+
+    // ADAT: inputs from active_port_counts, outputs halved explicitly
+    // (active_port_counts returns mux routing slots for ADAT outputs,
+    // which may differ from physical channel counts)
+    state.port_counts.adat.inputs = active.adat.inputs;
+    state.port_counts.adat.outputs = match rate {
+        88200 | 96000 => config.port_counts.adat.outputs / 2,
+        _ => 0,
+    };
+
+    // PCM and mixer from mux tables (correct for all device models)
+    state.port_counts.pcm.outputs = active.pcm.outputs;
+    state.port_counts.mix_ports.inputs = active.mix.inputs;
+    state.port_counts.mix_ports.outputs = active.mix.outputs;
+
+    // PCM inputs scale proportionally (not in mux tables)
+    state.port_counts.pcm.inputs = match rate {
+        88200 | 96000 => config.port_counts.pcm.inputs.min(16),
+        _ => 10, // 176.4/192 kHz
+    };
+
+    if matches!(rate, 176400 | 192000) {
+        state.port_counts.spdif.outputs = 0;
+    }
+
+    // Rebuild inputs array to match adjusted port counts
+    state.inputs.retain(|i| match i.input_type.as_str() {
+        "adat" => (i.index as u8) < state.port_counts.adat.inputs,
+        "spdif" => (i.index as u8) < state.port_counts.spdif.inputs,
+        _ => true,
+    });
+
+    // Rebuild mixer gains/soloed if mixer is disabled
+    if state.port_counts.mix_ports.inputs == 0 {
+        state.mixer.gains = vec![];
+        state.mixer.soloed = vec![];
+    }
+
+    // Recalculate meter count to match the adjusted port counts
+    state.meter_count = state.port_counts.analogue.inputs as u32
+        + state.port_counts.spdif.inputs as u32
+        + state.port_counts.adat.inputs as u32
+        + state.port_counts.analogue.outputs as u32
+        + state.port_counts.spdif.outputs as u32
+        + state.port_counts.adat.outputs as u32
+        + state.port_counts.mix_ports.outputs as u32
+        + state.port_counts.pcm.inputs as u32;
+
+    state
+}
+
 /// Derive a human-readable output name from the device config.
 fn output_name(config: &DeviceConfig, index: usize) -> String {
     // Use the line_out_descrs if available and non-None
@@ -347,5 +412,44 @@ mod tests {
             assert_eq!(route.route_type, "pcm", "route {} type", i);
             assert_eq!(route.index, i as u32, "route {} index", i);
         }
+    }
+
+    #[test]
+    fn mock_state_96k_halves_adat() {
+        let config = crate::protocol::devices::device_by_pid(0x8215).unwrap();
+        let state = build_state_for_rate(config, 96000);
+        assert_eq!(state.port_counts.adat.inputs, 4);
+        assert_eq!(state.port_counts.adat.outputs, 4);
+        // Analogue unchanged
+        assert_eq!(state.port_counts.analogue.inputs, 9);
+        // ADAT inputs in the inputs array should be 4
+        let adat_inputs: Vec<_> = state.inputs.iter().filter(|i| i.input_type == "adat").collect();
+        assert_eq!(adat_inputs.len(), 4);
+    }
+
+    #[test]
+    fn mock_state_192k_removes_adat_and_mixer() {
+        let config = crate::protocol::devices::device_by_pid(0x8215).unwrap();
+        let state = build_state_for_rate(config, 192000);
+        assert_eq!(state.port_counts.adat.inputs, 0);
+        assert_eq!(state.port_counts.adat.outputs, 0);
+        assert_eq!(state.port_counts.mix_ports.inputs, 0);
+        assert_eq!(state.port_counts.mix_ports.outputs, 0);
+        // PCM reduced
+        assert_eq!(state.port_counts.pcm.inputs, 10);
+        assert_eq!(state.port_counts.pcm.outputs, 10);
+        // No ADAT inputs in inputs array
+        let adat_inputs: Vec<_> = state.inputs.iter().filter(|i| i.input_type == "adat").collect();
+        assert_eq!(adat_inputs.len(), 0);
+    }
+
+    #[test]
+    fn mock_state_48k_has_full_ports() {
+        let config = crate::protocol::devices::device_by_pid(0x8215).unwrap();
+        let state = build_state_for_rate(config, 48000);
+        assert_eq!(state.port_counts.adat.inputs, 8);
+        assert_eq!(state.port_counts.adat.outputs, 8);
+        assert_eq!(state.port_counts.pcm.inputs, 20);
+        assert_eq!(state.port_counts.pcm.outputs, 20);
     }
 }

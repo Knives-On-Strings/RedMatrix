@@ -177,8 +177,36 @@ pub async fn handle_command(
             }
         }
         ClientMessage::SetSampleRate { payload } => {
-            state.sample_rate = payload.rate;
-            changes.insert("sample_rate".to_string(), serde_json::json!(payload.rate));
+            // Look up the device config by PID to rebuild state for the new rate,
+            // adjusting ADAT/mixer/PCM port counts (see mock_devices::build_state_for_rate).
+            let pid_str = state.device.pid.trim_start_matches("0x");
+            let pid = u16::from_str_radix(pid_str, 16).unwrap_or(0x8215);
+            if let Some(config) = crate::protocol::devices::device_by_pid(pid) {
+                let preserved_device = state.device.clone();
+                let preserved_monitor = state.monitor.clone();
+                let preserved_spdif = state.spdif_mode.clone();
+                let preserved_clock = state.clock_source.clone();
+                let preserved_sub = state.sub_assignments.clone();
+                let preserved_bus = state.bus_masters.clone();
+                let preserved_master = state.master_db;
+
+                let mut rebuilt =
+                    crate::server::mock_devices::build_state_for_rate(config, payload.rate);
+                rebuilt.device = preserved_device;
+                rebuilt.monitor = preserved_monitor;
+                rebuilt.spdif_mode = preserved_spdif;
+                rebuilt.clock_source = preserved_clock;
+                rebuilt.sub_assignments = preserved_sub;
+                rebuilt.bus_masters = preserved_bus;
+                rebuilt.master_db = preserved_master;
+
+                *state = rebuilt;
+            } else {
+                state.sample_rate = payload.rate;
+            }
+            // Signal a full state rebuild — the broadcast layer should send a full
+            // `device_state` message instead of an incremental `state_update`.
+            changes.insert("__full_state".to_string(), serde_json::json!(true));
         }
         ClientMessage::SetClockSource { payload } => {
             state.clock_source = match payload.source.as_str() {
@@ -466,6 +494,26 @@ mod tests {
             changes.get("save_config_remaining"),
             Some(&serde_json::json!(initial - 1))
         );
+    }
+
+    #[tokio::test]
+    async fn set_sample_rate_rebuilds_state() {
+        let state = make_test_state();
+
+        // Switch to 96 kHz
+        let msg = ClientMessage::SetSampleRate {
+            payload: crate::server::messages::SampleRatePayload { rate: 96000 },
+        };
+        let changes = handle_command(&state, msg).await.unwrap();
+
+        // Should return full_state key indicating a full rebuild
+        assert!(changes.contains_key("__full_state"), "should signal full state rebuild");
+
+        let s = state.read().await;
+        assert_eq!(s.sample_rate, 96000);
+        assert_eq!(s.port_counts.adat.inputs, 4);
+        let adat_count = s.inputs.iter().filter(|i| i.input_type == "adat").count();
+        assert_eq!(adat_count, 4);
     }
 
     #[tokio::test]
