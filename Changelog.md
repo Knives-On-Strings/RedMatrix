@@ -4,6 +4,11 @@ All notable changes to the RedMatrix Focusrite Control alternative will be docum
 
 ## [Unreleased]
 
+### Added
+- Meter ballistics — level meters use a hybrid response, snapping to peaks immediately and falling away over 300 ms, so transients are visible instead of being averaged into nothing.
+- Phantom power now asks before it arms. Enabling 48V puts up a confirmation dialog first, because sending phantom power to a ribbon mic is an expensive way to learn which button you clicked.
+- Port visibility follows the sample rate. Changing the sample rate rebuilds the device state, so the channels that genuinely exist at that rate are the ones shown — ADAT channels that disappear at 96 kHz no longer linger in the matrix.
+
 ## [0.7.0] - 2026-05-24
 
 ### Added
